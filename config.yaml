@@ -1,0 +1,120 @@
+wandb:
+  entity: kywch
+  project: pokemon
+  group: ~
+
+debug:
+  env:
+    #headless: False
+    stream_wrapper: False
+  train:
+    num_envs: 1
+    envs_per_worker: 1
+    envs_per_batch: 1
+    batch_size: 2048
+    total_timesteps: 10000
+    checkpoint_interval: 3
+    verbose: True
+    env_pool: False
+
+env:
+  headless: True
+  save_final_state: True
+  print_rewards: True
+  video_dir: video
+  state_dir: pyboy_states
+  init_state: Bulbasaur
+  action_freq: 24
+  max_steps: 3_000_000
+  save_video: False
+  fast_video: False
+  frame_stacks: 1
+  perfect_ivs: False
+  policy_obs_type: CnnLstmPolicy
+
+train:
+  seed: 1
+  torch_deterministic: True
+  device: cuda
+  total_timesteps: 100_000_000
+  learning_rate: 2.5e-4
+  num_envs: 64
+  num_steps: 128
+  anneal_lr: True
+  gamma: 0.998
+  gae_lambda: 0.95
+  num_minibatches: 4
+  update_epochs: 3
+  norm_adv: True
+  clip_coef: 0.1
+  clip_vloss: True
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  target_kl: ~
+
+  envs_per_worker: 1
+  envs_per_batch: ~
+  env_pool: True
+  verbose: True
+  data_dir: experiments
+  checkpoint_interval: 200
+  cpu_offload: True
+  pool_kernel: [0]
+  batch_size: 32768
+  batch_rows: 128
+  bptt_horizon: 16 #8
+  vf_clip_coef: 0.12 # 0.1
+  
+sweep:
+  method: random
+  name: sweep
+  metric:
+    goal: maximize
+    name: episodic_return
+  # Nested parameters name required by WandB API
+  parameters:
+    train:
+      parameters:
+        learning_rate: {
+          'distribution': 'log_uniform_values',
+          'min': 1e-4,
+          'max': 1e-1,
+        }
+        batch_size: {
+          'values': [128, 256, 512, 1024, 2048],
+        }
+        batch_rows: {
+          'values': [16, 32, 64, 128, 256],
+        }
+        bptt_horizon: {
+          'values': [4, 8, 16, 32],
+        }
+
+reward_zoo:
+  thatguy_bet:
+    reward:
+      explore_weight: 3.0
+      explore_npc_weight: 1.0
+      explore_hidden_obj_weight: 1.0
+      step_forgetting_factor:
+        npc: 0.995
+        hidden_obj: 0.95
+        coords: 0.9995
+        map_ids: 0.995
+        explore: 0.9995
+      forgetting_frequency: 10
+
+policy_zoo:
+  thatguy:
+    policy:
+      input_size: 512
+      hidden_size: 512
+      output_size: 512
+      framestack: 3
+      flat_size: 1920
+
+    recurrent:
+      input_size: 512
+      hidden_size: 512
+      num_layers: 1
