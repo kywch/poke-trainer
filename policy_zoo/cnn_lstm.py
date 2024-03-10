@@ -1,6 +1,3 @@
-import torch
-from torch import nn
-
 import pufferlib.models
 
 
@@ -8,12 +5,10 @@ class Recurrent(pufferlib.models.RecurrentWrapper):
     def __init__(self, env, policy, input_size=512, hidden_size=512, num_layers=1):
         super().__init__(env, policy, input_size, hidden_size, num_layers)
 
-# NOTE: This is CnnLstmPolicy with Recurrent wrapper
 class Policy(pufferlib.models.Convolutional):
     def __init__(
         self, env,
         input_size=512, hidden_size=512, output_size=512, framestack=3, flat_size=1920
-        # 14336 for self.output_shape = (144, 160, self.frame_stacks * 3)
     ):
         super().__init__(
             env=env,
@@ -26,7 +21,8 @@ class Policy(pufferlib.models.Convolutional):
         )
 
 
-# CHECK ME: Is this used?
+# TODO: Seperate these to different files
+'''
 class MultiConvolutionPolicy(pufferlib.models.Policy):
     def __init__(
         self,
@@ -109,16 +105,15 @@ class MultiConvolutionPolicy(pufferlib.models.Policy):
 
 
 
+class Policy(pufferlib.models.ProcgenResnet):
+    def __init__(self, env, cnn_width=16, mlp_width=512):
+        super().__init__(
+            env=env,
+            cnn_width=cnn_width,
+            mlp_width=mlp_width,
+        )
 
-# class Policy(pufferlib.models.ProcgenResnet):
-#     def __init__(self, env, cnn_width=16, mlp_width=512):
-#         super().__init__(
-#             env=env,
-#             cnn_width=cnn_width,
-#             mlp_width=mlp_width,
-#         )
 
-'''
 class Policy(pufferlib.models.Policy):
     def __init__(
         self,

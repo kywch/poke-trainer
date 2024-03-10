@@ -30,10 +30,10 @@ class Performance:
     total_agent_steps = 0
     epoch_time = 0
     epoch_sps = 0
-    evaluation_time = 0
-    evaluation_sps = 0
-    evaluation_memory = 0
-    evaluation_pytorch_memory = 0
+    eval_time = 0
+    eval_sps = 0
+    eval_memory = 0
+    eval_pytorch_memory = 0
     env_time = 0
     env_sps = 0
     inference_time = 0
@@ -329,7 +329,7 @@ class CleanPuffeRL:
                     "learning_rate": self.optimizer.param_groups[0]["lr"],
                     **{f"losses/{k}": v for k, v in self.losses.items()},
                     **{f"performance/{k}": v for k, v in self.performance.items()},
-                    **{f"stats/{k}": v for k, v in self.stats.items()},
+                    **{f"avg_stats/{k}": v for k, v in self.stats.items()},
                     **{f"max_stats/{k}": v for k, v in self.max_stats.items()},
                     **{
                         f"skillrank/{policy}": elo

@@ -28,7 +28,6 @@ def colors_generator(step=1):
         yield rgb
         hue = (hue + step) % 360
 
-
 class StreamWrapper(gym.Wrapper):
     def __init__(self, env, stream_metadata={}):
         super().__init__(env)
@@ -44,7 +43,7 @@ class StreamWrapper(gym.Wrapper):
         self.upload_interval = 80
         self.steam_step_counter = 0
         self.coord_list = []
-        self.start_time = time.time()        
+        self.start_time = time.time()
         if hasattr(env, "pyboy"):
             self.emulator = env.pyboy
         elif hasattr(env, "game"):
@@ -73,7 +72,7 @@ class StreamWrapper(gym.Wrapper):
         map_n = self.emulator.get_memory_value(MAP_N_ADDRESS)
         self.coord_list.append([x_pos, y_pos, map_n])
         
-        self.stream_metadata["extra"] = f"uptime: {round(self.uptime(), 2)} min"
+        self.stream_metadata["extra"] = f"({self.uptime()} hrs)"
         self.stream_metadata["color"] = next(self.color_generator)
         
         if self.steam_step_counter >= self.upload_interval:
@@ -113,4 +112,4 @@ class StreamWrapper(gym.Wrapper):
         return self.env.reset(*args, **kwargs)
     
     def uptime(self):
-        return (time.time() - self.start_time) / 60
+        return round((time.time() - self.start_time) / 3600, 1)  # hrs

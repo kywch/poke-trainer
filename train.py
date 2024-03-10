@@ -108,6 +108,11 @@ def update_args(args):
     elif args.vectorization == "multiprocessing":
         args.vectorization = pufferlib.vectorization.Multiprocessing
 
+    # Match the policy to env obs type. See RedGymEnv.policy_obs_type
+    # NOTE: When adding a policy with different obs space, also check RedGymEnv.observation_space()
+    if args.policy_name == "cnn_lstm":
+        args.env.policy_obs_type = "CnnLstmPolicy"
+
     return args
 
 def init_wandb(args, resume=True):
@@ -155,7 +160,7 @@ def train(args, env_creator, agent_creator):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Parse environment argument", add_help=False)
     parser.add_argument("-y", "--yaml", default="config.yaml", help="Configuration file to use")
-    parser.add_argument("-p", "--policy-name", default="thatguy", help="Policy module to use in policy_zoo")
+    parser.add_argument("-p", "--policy-name", default="cnn_lstm", help="Policy module to use in policy_zoo")
     parser.add_argument("-r", "--reward-name", default="thatguy_bet", help="Reward module to use in reward_zoo")
     parser.add_argument("--mode", type=str, default="train", choices=["train", "evaluate"])
     parser.add_argument("--eval-model-path", type=str, default=None, help="Path to model to evaluate")

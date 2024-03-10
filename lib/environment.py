@@ -48,7 +48,7 @@ class RedGymEnv(Env):
         self.frame_stacks = env_config.frame_stacks
         self.perfect_ivs = env_config.perfect_ivs
 
-        # Obs space-related
+        # Obs space-related. TODO: avoid hardcoding?
         self.policy_obs_type = env_config.policy_obs_type
         self.output_shape = (72, 80, self.frame_stacks * 3)  # CnnLstmPolicy
         # self.output_shape = (77, 80, self.frame_stacks)

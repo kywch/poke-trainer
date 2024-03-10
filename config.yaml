@@ -30,16 +30,14 @@ env:
   fast_video: False
   frame_stacks: 1
   perfect_ivs: False
-  policy_obs_type: CnnLstmPolicy
 
 train:
   seed: 1
   torch_deterministic: True
   device: cuda
   total_timesteps: 100_000_000
+  batch_size: 32768
   learning_rate: 2.5e-4
-  num_envs: 64
-  num_steps: 128
   anneal_lr: True
   gamma: 0.998
   gae_lambda: 0.95
@@ -52,20 +50,21 @@ train:
   vf_coef: 0.5
   max_grad_norm: 0.5
   target_kl: ~
-
-  envs_per_worker: 1
-  envs_per_batch: ~
-  env_pool: True
-  verbose: True
-  data_dir: experiments
-  checkpoint_interval: 200
-  cpu_offload: True
-  pool_kernel: [0]
-  batch_size: 32768
   batch_rows: 128
   bptt_horizon: 16 #8
   vf_clip_coef: 0.12 # 0.1
-  
+
+  num_envs: 150
+  envs_per_worker: 2
+  envs_per_batch: 60
+  env_pool: True
+
+  verbose: True
+  data_dir: runs
+  checkpoint_interval: 200
+  cpu_offload: True
+  pool_kernel: [0]
+
 sweep:
   method: random
   name: sweep
@@ -106,7 +105,7 @@ reward_zoo:
       forgetting_frequency: 10
 
 policy_zoo:
-  thatguy:
+  cnn_lstm:
     policy:
       input_size: 512
       hidden_size: 512
