@@ -1,18 +1,77 @@
 import argparse
+import importlib
 import sys
 import time
+from typing import Callable
 
+import torch
 import pufferlib
 import pufferlib.utils
+import gymnasium as gym
 
 from pokemonred_puffer.cleanrl_puffer import rollout
 from pokemonred_puffer.train import (
     load_from_config,
-    setup_agent,
+    make_env_creator,
     update_args,
     init_wandb,
     train,
 )
+
+# These are used as the defaults in argparse
+CUSTOM_REWARD_ENV = "environment.CustomRewardEnv"  # see environment.py
+CUSTOM_POLICY = "policy.ConvolutionalPolicy"  # see policy.py
+
+
+# Returns env_creator, agent_creator
+def setup_agent(
+    wrappers: list[str],
+    reward_name: str,
+    policy_name: str,
+) -> Callable[[pufferlib.namespace, pufferlib.namespace], pufferlib.emulation.GymnasiumPufferEnv]:
+    # TODO: Make this less dependent on the name of this repo and its file structure
+    wrapper_classes = {
+        k: getattr(
+            importlib.import_module(f"pokemonred_puffer.wrappers.{k.split('.')[0]}"),
+            k.split(".")[1],
+        )
+        for wrapper_dicts in wrappers
+        for k in wrapper_dicts.keys()
+    }
+    reward_module, reward_class_name = reward_name.split(".")
+    reward_class = getattr(
+        importlib.import_module(reward_module), reward_class_name
+    )
+    # NOTE: This assumes reward_module has RewardWrapper(RedGymEnv) class
+    env_creator = make_env_creator(wrapper_classes, reward_class)
+
+    policy_module_name, policy_class_name = policy_name.split(".")
+    policy_module = importlib.import_module(policy_module_name)
+    policy_class = getattr(policy_module, policy_class_name)
+
+    def agent_creator(env: gym.Env, args: pufferlib.namespace):
+        policy = policy_class(env, **args.policies[policy_name]["policy"])
+        if "recurrent" in args.policies[policy_name]:
+            recurrent_args = args.policies[policy_name]["recurrent"]
+            recurrent_class_name = recurrent_args["name"]
+            del recurrent_args["name"]
+            policy = getattr(policy_module, recurrent_class_name)(env, policy, **recurrent_args)
+            policy = pufferlib.frameworks.cleanrl.RecurrentPolicy(policy)
+        else:
+            policy = pufferlib.frameworks.cleanrl.Policy(policy)
+
+        if args.train.device == "cuda":
+            torch.set_float32_matmul_precision(args.train.float32_matmul_precision)
+            policy = policy.to(args.train.device, non_blocking=True)
+            if args.train.compile:
+                policy.get_value = torch.compile(policy.get_value, mode=args.train.compile_mode)
+                policy.get_action_and_value = torch.compile(
+                    policy.get_action_and_value, mode=args.train.compile_mode
+                )
+
+        return policy
+
+    return env_creator, agent_creator
 
 
 if __name__ == "__main__":
@@ -21,13 +80,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p",
         "--policy-name",
-        default="multi_convolutional.MultiConvolutionalPolicy",
+        default=CUSTOM_POLICY,
         help="Policy module to use in policies",
     )
     parser.add_argument(
         "-r",
         "--reward-name",
-        default="baseline.BaselineRewardEnv",
+        default=CUSTOM_REWARD_ENV,
         help="Reward module to use in rewards",
     )
     parser.add_argument(

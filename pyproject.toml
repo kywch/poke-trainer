@@ -11,8 +11,14 @@ classifiers = [
 	"Programming Language :: Python :: 3.10",
 	"Programming Language :: Python :: Implementation :: CPython",
 ]
+
+# versions are pinned by pufferlib
 dependencies = [
-    "pokemonred_puffer@git+https://github.com/kywch/pokemonred_puffer"
+    "gymnasium",
+    "numpy",
+    "pokemonred_puffer@git+https://github.com/kywch/pokemonred_puffer",
+    "pufferlib",
+    "torch",
 ]
 
 [tool.setuptools.packages.find]
