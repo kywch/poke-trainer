@@ -18,6 +18,8 @@ debug:
     batch_rows: 32
     bptt_horizon: 4
     total_timesteps: 1000
+    save_overlay: True
+    overlay_interval: 4
     save_checkpoint: True
     checkpoint_interval: 4
     verbose: True
@@ -71,6 +73,8 @@ train:
 
   verbose: True
   data_dir: runs
+  save_overlay: True
+  overlay_interval: 4
   save_checkpoint: False
   checkpoint_interval: 200
   cpu_offload: True
