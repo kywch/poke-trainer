@@ -1,5 +1,4 @@
 from typing import Optional
-import functools
 
 import numpy as np
 from gymnasium import spaces
@@ -25,10 +24,8 @@ class CustomRewardEnv(RedGymEnv):
         self.explore_npc_weight = reward_config["explore_npc_weight"]
         self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
 
-    # NOTE: observation space must match the policy input
-    @functools.cached_property
-    def observation_space(self):
-        return spaces.Box(
+        # NOTE: observation space must match the policy input
+        self.observation_space = spaces.Box(
             low=0, high=255, shape=self.screen_output_shape, dtype=np.uint8
         )
 

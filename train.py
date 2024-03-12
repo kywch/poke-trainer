@@ -29,15 +29,17 @@ def setup_agent(
     reward_name: str,
     policy_name: str,
 ) -> Callable[[pufferlib.namespace, pufferlib.namespace], pufferlib.emulation.GymnasiumPufferEnv]:
-    # TODO: Make this less dependent on the name of this repo and its file structure
-    wrapper_classes = {
-        k: getattr(
-            importlib.import_module(f"pokemonred_puffer.wrappers.{k.split('.')[0]}"),
-            k.split(".")[1],
+    wrapper_classes = [
+        (
+            k,
+            getattr(
+                importlib.import_module(f"pokemonred_puffer.wrappers.{k.split('.')[0]}"),
+                k.split(".")[1],
+            ),
         )
         for wrapper_dicts in wrappers
         for k in wrapper_dicts.keys()
-    }
+    ]
     reward_module, reward_class_name = reward_name.split(".")
     reward_class = getattr(
         importlib.import_module(reward_module), reward_class_name
