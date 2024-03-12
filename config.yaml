@@ -74,7 +74,7 @@ train:
   verbose: True
   data_dir: runs
   save_overlay: True
-  overlay_interval: 4
+  overlay_interval: 200
   save_checkpoint: False
   checkpoint_interval: 200
   cpu_offload: True
