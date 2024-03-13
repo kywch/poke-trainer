@@ -105,14 +105,15 @@ class CustomRewardEnv(RedGymEnv):
             "moves_obtained": sum(self.moves_obtained) * 0.00010,
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,
             "level": self.get_levels_reward(),
-            # "opponent_level": self.max_opponent_level,
+            "opponent_level": self.max_opponent_level,
             # "death_reward": self.died_count,
             "badge": self.get_badges() * 5,
             #"heal": self.total_heal_health,
             "explore": sum(self.seen_coords.values()) * 0.01,
-            "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
+            # "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
             "taught_cut": 4 * int(self.check_if_party_has_cut()),
-            "cut_coords": sum(self.cut_coords.values()) * 0.001,
+            "cut_coords": sum(self.cut_coords.values()) * 1.0,
+            "cut_tiles": len(self.cut_tiles) * 1.0,
         }
 
     def update_max_event_rew(self):
@@ -134,13 +135,13 @@ class CustomRewardEnv(RedGymEnv):
             0,
         )
 
-    def get_levels_reward(self):
+    def get_levels_reward(self, level_cap=30):
         party_size = self.read_m(PARTY_SIZE)
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:party_size]] if x > 0
         ]
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
-        if self.max_level_sum < 15:
+        if self.max_level_sum < level_cap:
             return self.max_level_sum
         else:
-            return 15 + (self.max_level_sum - 15) / 4
+            return level_cap + (self.max_level_sum - level_cap) / 4
