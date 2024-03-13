@@ -50,9 +50,9 @@ class CustomRewardEnv(RedGymEnv):
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
 
-        # if has hm01 cut, then do not give reward until cut is learned
-        if self.got_hm01_cut_but_not_learned_yet():
-            return 0
+        # # if has hm01 cut, then do not give reward until cut is learned
+        # if self.got_hm01_cut_but_not_learned_yet():
+        #     return 0
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()
