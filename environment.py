@@ -20,9 +20,10 @@ class CustomRewardEnv(RedGymEnv):
         super().__init__(env_config)
         self._reset_reward_vars()
 
-        self.explore_weight = reward_config["explore_weight"]
-        self.explore_npc_weight = reward_config["explore_npc_weight"]
-        self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
+        # NOTE: these are not yet used
+        # self.explore_weight = reward_config["explore_weight"]
+        # self.explore_npc_weight = reward_config["explore_npc_weight"]
+        # self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Box(
@@ -42,17 +43,29 @@ class CustomRewardEnv(RedGymEnv):
     def _reset_reward_vars(self):
         self.max_event_rew = 0
         self.max_level_sum = 0
+        self.use_limited_reward = False
         self.base_event_flags = sum(
             self.bit_count(self.read_m(i))
             for i in range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)
         )
 
+    def step(self, action):
+        self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
+
+        obs, rew, reset, _, info = super().step(action)
+
+        # NOTE: info is not always provided
+        if "stats" in info:
+            info["stats"]["under_limited_reward"] = self.use_limited_reward
+
+        return obs, rew, reset, False, info
+
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
 
-        # # if has hm01 cut, then do not give reward until cut is learned
-        # if self.got_hm01_cut_but_not_learned_yet():
-        #     return 0
+        # if has hm01 cut, then do not give reward until cut is learned
+        if self.use_limited_reward:
+            return 0
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()
@@ -63,10 +76,21 @@ class CustomRewardEnv(RedGymEnv):
         return new_step
 
     def got_hm01_cut_but_not_learned_yet(self):
+        # prev events that need to be true
+        prev_events = [
+            self.read_bit(0xD7F1, 0),  # met bill
+            self.read_bit(0xD7F2, 3),  # used cell separator on bill
+            self.read_bit(0xD7F2, 4),  # ss ticket
+            self.read_bit(0xD7F2, 5),  # met bill 2
+            self.read_bit(0xD7F2, 6),  # bill said use cell separator
+            self.read_bit(0xD7F2, 7),  # left bills house after helping
+        ]
+
         got_hm01 = self.read_bit(0xD803, 0)
         rubbed_captain = self.read_bit(0xD803, 1)
         has_cut = self.check_if_party_has_cut()
-        return got_hm01 and rubbed_captain and not has_cut
+
+        return all(prev_events) and got_hm01 and rubbed_captain and not has_cut
 
     # TODO: make the reward weights configurable
     def get_game_state_reward(self, print_stats=False):
@@ -75,7 +99,7 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             "event": 4 * self.update_max_event_rew(),
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,
+            "explore_npcs": sum(self.seen_npcs.values()) * 0.02,
             # "seen_pokemon": sum(self.seen_pokemon) * 0.000010,
             # "caught_pokemon": sum(self.caught_pokemon) * 0.000010,
             "moves_obtained": sum(self.moves_obtained) * 0.00010,
