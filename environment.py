@@ -105,7 +105,8 @@ class CustomRewardEnv(RedGymEnv):
             "moves_obtained": sum(self.moves_obtained) * 0.00010,
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,
             "level": self.get_levels_reward(),
-            "opponent_level": self.max_opponent_level,
+            "opponent_level": self.max_opponent_level * 0.5,
+            "party_size": self.party_size * 0.2,
             # "death_reward": self.died_count,
             "badge": self.get_badges() * 5,
             #"heal": self.total_heal_health,
@@ -124,23 +125,21 @@ class CustomRewardEnv(RedGymEnv):
     def get_all_events_reward(self):
         # adds up all event flags, exclude museum ticket
         return max(
-            sum(
-                [
-                    self.bit_count(self.read_m(i))
-                    for i in range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)
-                ]
-            )
+            sum(self.bit_count(self.read_m(i))
+                for i in range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH))
             - self.base_event_flags
             - int(self.read_bit(*MUSEUM_TICKET)),
             0,
         )
 
-    def get_levels_reward(self, level_cap=30):
-        party_size = self.read_m(PARTY_SIZE)
+    def get_levels_reward(self):
+        # start from 15, and gradually increase according to the max opponent level
+        level_cap = max(self.max_opponent_level, 15)
         party_levels = [
-            x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:party_size]] if x > 0
+            x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
         ]
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
+
         if self.max_level_sum < level_cap:
             return self.max_level_sum
         else:
