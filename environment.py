@@ -75,7 +75,7 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             "event": 4 * self.update_max_event_rew(),
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.02,
+            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,
             # "seen_pokemon": sum(self.seen_pokemon) * 0.000010,
             # "caught_pokemon": sum(self.caught_pokemon) * 0.000010,
             "moves_obtained": sum(self.moves_obtained) * 0.00010,
