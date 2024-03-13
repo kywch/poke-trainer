@@ -50,8 +50,8 @@ class CustomRewardEnv(RedGymEnv):
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
 
-        # if has hm01 cut, then do not give reward if not taught cut
-        if self.got_hm01_cut() and not self.check_if_party_has_cut():
+        # if has hm01 cut, then do not give reward until cut is learned
+        if self.got_hm01_cut_but_not_learned_yet():
             return 0
 
         # compute reward
@@ -62,8 +62,11 @@ class CustomRewardEnv(RedGymEnv):
         self.total_reward = new_total
         return new_step
 
-    def got_hm01_cut(self):
-        return self.read_bit(0xD803, 0)
+    def got_hm01_cut_but_not_learned_yet(self):
+        got_hm01 = self.read_bit(0xD803, 0)
+        rubbed_captain = self.read_bit(0xD803, 1)
+        has_cut = self.check_if_party_has_cut()
+        return got_hm01 and rubbed_captain and not has_cut
 
     # TODO: make the reward weights configurable
     def get_game_state_reward(self, print_stats=False):
