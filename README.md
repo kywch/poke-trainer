@@ -14,5 +14,5 @@ $ pip install -e .
 If build/compile fails or you get open-cv related error
 ```
 $ sudo apt-get update
-$ sudo apt-get install bulid-essential libgl1
+$ sudo apt-get install build-essential libgl1
 ```
