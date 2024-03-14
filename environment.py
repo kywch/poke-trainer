@@ -36,6 +36,7 @@ class CustomRewardEnv(RedGymEnv):
                 "map_progress": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
                 "num_badge": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
                 "party_size": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
+                # TODO: probably need some level obs, for max/min/sum of the party?
                 #"direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),  # TODO: replace with tree in front
                 "under_limited_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
                 "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
@@ -45,10 +46,10 @@ class CustomRewardEnv(RedGymEnv):
     def _get_obs(self):
         return {
             "screen": self._get_screen_obs(),
-            "curr_map_idx": np.array(self._get_map_obs(), dtype=np.uint8),
-            "map_progress": np.array(self.max_map_progress, dtype=np.uint8),
-            "num_badge": np.array(self.get_badges(), dtype=np.uint8),
-            "party_size": np.array(self.party_size, dtype=np.uint8),
+            "curr_map_idx": np.array(self._get_map_obs(), dtype=np.uint8),  # using 256 one-hot
+            "map_progress": np.array(self.max_map_progress, dtype=np.uint8),  # using 16 one-hot
+            "num_badge": np.array(self.get_badges(), dtype=np.uint8),  # using 9 one-hot
+            "party_size": np.array(self.party_size, dtype=np.uint8),  # using 8 one-hot -- CHECK ME: below 8?
             #"direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
             "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
@@ -132,20 +133,25 @@ class CustomRewardEnv(RedGymEnv):
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
 
         return {
-            "event": 4 * self.update_max_event_rew(),
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.02,
-            # "seen_pokemon": sum(self.seen_pokemon) * 0.000010,
-            # "caught_pokemon": sum(self.caught_pokemon) * 0.000010,
-            "moves_obtained": sum(self.moves_obtained) * 0.00010,
-            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,
-            "level": self.get_levels_reward(),
-            "opponent_level": self.max_opponent_level * 0.5,
-            "party_size": self.party_size * 0.2,
-            # "death_reward": self.died_count,
+            # Progress-related rewards
+            "event": 0.3 * self.update_max_event_rew(),
             "badge": self.get_badges() * 5,
+            "map_progress": self.max_map_progress * 3.0,
+            "opponent_level": self.max_opponent_level * 2.0,
+            "seen_pokemon": sum(self.seen_pokemon) * 1.0,
+            # "caught_pokemon": sum(self.caught_pokemon) * 0.000010,
+
+            "moves_obtained": sum(self.moves_obtained) * 2.0,
+            "level": self.get_levels_reward(),
+            "party_size": self.party_size * 3.0,
+            # "death_reward": self.died_count,
             #"heal": self.total_heal_health,
+
             "explore": sum(self.seen_coords.values()) * 0.01,
+            "explore_npcs": sum(self.seen_npcs.values()) * 0.02,
+            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.1,
             # "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
+
             "taught_cut": 4 * int(self.taught_cut),
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
             "cut_tiles": len(self.cut_tiles) * 1.0,
