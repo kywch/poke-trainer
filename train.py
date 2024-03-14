@@ -20,7 +20,7 @@ from pokemonred_puffer.train import (
 
 # These are used as the defaults in argparse
 CUSTOM_REWARD_ENV = "environment.CustomRewardEnv"  # see environment.py
-CUSTOM_POLICY = "policy.ConvolutionalPolicy"  # see policy.py
+CUSTOM_POLICY = "policy_multiconv.MultiConvolutionalPolicy"  # see policy.py
 
 
 # Returns env_creator, agent_creator

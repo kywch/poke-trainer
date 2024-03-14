@@ -26,14 +26,24 @@ class CustomRewardEnv(RedGymEnv):
         # self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
 
         # NOTE: observation space must match the policy input
-        self.observation_space = spaces.Box(
-            low=0, high=255, shape=self.screen_output_shape, dtype=np.uint8
+        self.observation_space = spaces.Dict(
+            {
+                "screen": spaces.Box(
+                    low=0, high=255, shape=self.screen_output_shape, dtype=np.uint8
+                ),
+                # Discrete is more apt, but pufferlib is slower at processing Discrete
+                "direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),
+                "under_limited_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
+                "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
+            }
         )
 
-    # This method is called by the environment to get the observation
     def _get_obs(self):
         return {
             "screen": self._get_screen_obs(),
+            "direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
+            "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
+            "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
         }
 
     def reset(self, seed: Optional[int] = None):
@@ -44,6 +54,7 @@ class CustomRewardEnv(RedGymEnv):
         self.max_event_rew = 0
         self.max_level_sum = 0
         self.use_limited_reward = False
+        self.limit_reward_cooldown = 0  # to prevent spamming limit reward
         self.base_event_flags = sum(
             self.bit_count(self.read_m(i))
             for i in range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)
@@ -51,6 +62,8 @@ class CustomRewardEnv(RedGymEnv):
 
     def step(self, action):
         self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
+        if self.limit_reward_cooldown > 0:
+            self.limit_reward_cooldown -= 1
 
         obs, rew, reset, _, info = super().step(action)
 
@@ -63,8 +76,13 @@ class CustomRewardEnv(RedGymEnv):
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
 
-        # if has hm01 cut, then do not give reward until cut is learned
+        # if has hm01 cut, then do not give normal reward until cut is learned
         if self.use_limited_reward:
+            # encourage going to action bag menu with very small reward
+            if self.seen_action_bag_menu is True and self.limit_reward_cooldown == 0:
+                self.limit_reward_cooldown = 30
+                return 0.0001
+
             return 0
 
         # compute reward
@@ -88,9 +106,8 @@ class CustomRewardEnv(RedGymEnv):
 
         got_hm01 = self.read_bit(0xD803, 0)
         rubbed_captain = self.read_bit(0xD803, 1)
-        has_cut = self.check_if_party_has_cut()
 
-        return all(prev_events) and got_hm01 and rubbed_captain and not has_cut
+        return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
 
     # TODO: make the reward weights configurable
     def get_game_state_reward(self, print_stats=False):
@@ -112,7 +129,7 @@ class CustomRewardEnv(RedGymEnv):
             #"heal": self.total_heal_health,
             "explore": sum(self.seen_coords.values()) * 0.01,
             # "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
-            "taught_cut": 4 * int(self.check_if_party_has_cut()),
+            "taught_cut": 4 * int(self.taught_cut),
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
             "cut_tiles": len(self.cut_tiles) * 1.0,
         }
@@ -132,9 +149,7 @@ class CustomRewardEnv(RedGymEnv):
             0,
         )
 
-    def get_levels_reward(self):
-        # start from 15, and gradually increase according to the max opponent level
-        level_cap = max(self.max_opponent_level, 15)
+    def get_levels_reward(self, level_cap=15):
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
         ]
