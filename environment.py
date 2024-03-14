@@ -18,6 +18,7 @@ MUSEUM_TICKET = (0xD754, 0)
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
+        self.event_obs = np.zeros(320, dtype=np.uint8)
         self._reset_reward_vars()
 
         # NOTE: these are not yet used
@@ -32,6 +33,7 @@ class CustomRewardEnv(RedGymEnv):
                     low=0, high=255, shape=self.screen_output_shape, dtype=np.uint8
                 ),
                 # Discrete is more apt, but pufferlib is slower at processing Discrete
+                "event_obs": spaces.Box(low=0, high=255, shape=(320,), dtype=np.uint8),
                 "direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),
                 "under_limited_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
                 "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
@@ -41,6 +43,7 @@ class CustomRewardEnv(RedGymEnv):
     def _get_obs(self):
         return {
             "screen": self._get_screen_obs(),
+            "event_obs": self.event_obs,
             "direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
             "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
@@ -55,10 +58,13 @@ class CustomRewardEnv(RedGymEnv):
         self.max_level_sum = 0
         self.use_limited_reward = False
         self.limit_reward_cooldown = 0  # to prevent spamming limit reward
-        self.base_event_flags = sum(
-            self.bit_count(self.read_m(i))
-            for i in range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)
-        )
+
+        self._update_event_obs()
+        self.base_event_flags = self.event_obs.sum()
+
+    def _update_event_obs(self):
+        for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
+            self.event_obs[i] = self.bit_count(self.read_m(addr))
 
     def step(self, action):
         self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
@@ -66,6 +72,8 @@ class CustomRewardEnv(RedGymEnv):
             self.limit_reward_cooldown -= 1
 
         obs, rew, reset, _, info = super().step(action)
+
+        self._update_event_obs()
 
         # NOTE: info is not always provided
         if "stats" in info:
@@ -142,8 +150,7 @@ class CustomRewardEnv(RedGymEnv):
     def get_all_events_reward(self):
         # adds up all event flags, exclude museum ticket
         return max(
-            sum(self.bit_count(self.read_m(i))
-                for i in range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH))
+            self.event_obs.sum()
             - self.base_event_flags
             - int(self.read_bit(*MUSEUM_TICKET)),
             0,
