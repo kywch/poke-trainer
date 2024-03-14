@@ -134,14 +134,15 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             # Progress-related rewards
-            "event": 0.3 * self.update_max_event_rew(),
+            "event": self.update_max_event_rew() * 1.0,  # not enough event with 0.3, also consider rewarding key events
             "badge": self.get_badges() * 5,
             "map_progress": self.max_map_progress * 3.0,
             "opponent_level": self.max_opponent_level * 2.0,
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
             # "caught_pokemon": sum(self.caught_pokemon) * 0.000010,
 
-            "moves_obtained": sum(self.moves_obtained) * 2.0,
+            # perhaps, only reward learning key moves? might have no room for cut
+            "moves_obtained": sum(self.moves_obtained) * 0.001,
             "level": self.get_levels_reward(),
             "party_size": self.party_size * 3.0,
             # "death_reward": self.died_count,
@@ -149,7 +150,7 @@ class CustomRewardEnv(RedGymEnv):
 
             "explore": sum(self.seen_coords.values()) * 0.01,
             "explore_npcs": sum(self.seen_npcs.values()) * 0.02,
-            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.1,
+            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,
             # "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
 
             "taught_cut": 4 * int(self.taught_cut),
