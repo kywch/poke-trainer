@@ -8,7 +8,7 @@ unpack_batched_obs = torch.compiler.disable(unpack_batched_obs)
 
 # Because torch.nn.functional.one_hot cannot be traced by torch as of 2.2.0
 
-FLAT_DIM = 1920 + 320 + 4 + 2  # screen + event obs + direction on hot + 2 flags
+FLAT_DIM = 1920 + 9 + 4 + 2  # screen + badge one hot + direction one hot + 2 flags
 
 
 def one_hot(tensor, num_classes):
@@ -98,7 +98,7 @@ class MultiConvolutionalPolicy(pufferlib.models.Policy):
             torch.cat(
                 (
                     *output,
-                    observations["event_obs"].float(),
+                    one_hot(observations["num_badge"].long(), 9).float().squeeze(1),
                     one_hot(observations["direction"].long(), 4).float().squeeze(1),
                     observations["under_limited_reward"].float(),
                     observations["cut_in_party"].float(),

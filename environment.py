@@ -33,7 +33,7 @@ class CustomRewardEnv(RedGymEnv):
                     low=0, high=255, shape=self.screen_output_shape, dtype=np.uint8
                 ),
                 # Discrete is more apt, but pufferlib is slower at processing Discrete
-                "event_obs": spaces.Box(low=0, high=255, shape=(320,), dtype=np.uint8),
+                "num_badge": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
                 "direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),
                 "under_limited_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
                 "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
@@ -43,7 +43,7 @@ class CustomRewardEnv(RedGymEnv):
     def _get_obs(self):
         return {
             "screen": self._get_screen_obs(),
-            "event_obs": self.event_obs,
+            "num_badge": np.array(self.get_badges(), dtype=np.uint8),
             "direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
             "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
