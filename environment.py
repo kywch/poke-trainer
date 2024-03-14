@@ -8,7 +8,6 @@ from pokemonred_puffer.environment import (
     RedGymEnv,
     EVENT_FLAGS_START,
     EVENTS_FLAGS_LENGTH,
-    PARTY_SIZE,
     PARTY_LEVEL_ADDRS,
 )
 
@@ -33,8 +32,11 @@ class CustomRewardEnv(RedGymEnv):
                     low=0, high=255, shape=self.screen_output_shape, dtype=np.uint8
                 ),
                 # Discrete is more apt, but pufferlib is slower at processing Discrete
+                "curr_map_idx": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
+                "map_progress": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
                 "num_badge": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
-                "direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),
+                "party_size": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
+                #"direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),  # TODO: replace with tree in front
                 "under_limited_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
                 "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
             }
@@ -43,11 +45,18 @@ class CustomRewardEnv(RedGymEnv):
     def _get_obs(self):
         return {
             "screen": self._get_screen_obs(),
+            "curr_map_idx": np.array(self._get_map_obs(), dtype=np.uint8),
+            "map_progress": np.array(self.max_map_progress, dtype=np.uint8),
             "num_badge": np.array(self.get_badges(), dtype=np.uint8),
-            "direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
+            "party_size": np.array(self.party_size, dtype=np.uint8),
+            #"direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
             "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
         }
+
+    def _get_map_obs(self):
+        # see pokemonred_puffer/map_data.json for map ids
+        return self.read_m(0xD35E) + 1  # starts from -1 (Kanto) to 247 (Agathas room)
 
     def reset(self, seed: Optional[int] = None):
         self._reset_reward_vars()
