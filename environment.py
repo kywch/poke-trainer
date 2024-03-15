@@ -150,27 +150,30 @@ class CustomRewardEnv(RedGymEnv):
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
 
         return {
-            # Progress-related rewards
-            "event": self.update_max_event_rew() * 1.0,  # not enough event with 0.3, also consider rewarding key events
+            # Main milestones for story progression
             "badge": self.get_badges() * 10.0,
             "key_events": self.get_key_events_reward() * 3.0,  # bill_said, got_hm01, taught_cut
             "map_progress": self.max_map_progress * 3.0,
             "opponent_level": self.max_opponent_level * 2.0,
-            "seen_pokemon": sum(self.seen_pokemon) * 1.0,
-            # "caught_pokemon": sum(self.caught_pokemon) * 0.000010,
 
-            # perhaps, only reward learning key moves? might have no room for cut
-            "moves_obtained": sum(self.moves_obtained) * 0.5,  # perhaps this will help with learning cut?
-            "level": self.get_levels_reward(),
+            # Party strength proxy
             "party_size": self.party_size * 3.0,
-            # "death_reward": self.died_count,
-            #"heal": self.total_heal_health,
+            "level": self.get_levels_reward(),
 
-            "explore": sum(self.seen_coords.values()) * 0.01,
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # from .02, to increase event occurance
-            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,
-            # "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
+            # Exploration: bias agents' actions with weight for each new gain
+            # These kick in when agent is "stuck"
 
+            # First, always search for new pokemon or events
+            "seen_pokemon": sum(self.seen_pokemon) * 1.0,
+            "event": self.update_max_event_rew() * 1.0,  # not enough event with 0.3, also consider rewarding key events
+
+            # If the above doesn't work, try these in the order of importance
+            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
+            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
+            "explore": sum(self.seen_coords.values()) * 0.01,  # go to unvisited tiles
+            "moves_obtained": sum(self.moves_obtained) * 0.01,  # try to learn new moves, via menuing?
+
+            # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
             "cut_tiles": len(self.cut_tiles) * 1.0,
         }
