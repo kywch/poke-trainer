@@ -8,11 +8,12 @@ unpack_batched_obs = torch.compiler.disable(unpack_batched_obs)
 
 # Because torch.nn.functional.one_hot cannot be traced by torch as of 2.2.0
 
-# screen (1920) + map idx one hot (256) badge one hot (9) + party size one hot (8)
+# screen (1920) + x, y coords (2) + map idx one hot (256)
 #  + map progress one hot (16, check essential_map_locations)
+#  + badge one hot (9) + party size one hot (8)
 #  + seen pokemon (1), which is a great proxy for game progression
 #  + 2 flags (under_limited_reward, cut_in_party)
-FLAT_DIM = 1920 + 256 + 9 + 8 + 16 + 1 + 2
+FLAT_DIM = 1920 + 256 + 16 + 9 + 8 + 1 + 2
 
 
 def one_hot(tensor, num_classes):
@@ -102,6 +103,8 @@ class MultiConvolutionalPolicy(pufferlib.models.Policy):
             torch.cat(
                 (
                     *output,
+                    # observations["x"].float(),
+                    # observations["y"].float(),
                     one_hot(observations["curr_map_idx"].long(), 256).float().squeeze(1),
                     one_hot(observations["map_progress"].long(), 16).float().squeeze(1),
                     one_hot(observations["num_badge"].long(), 9).float().squeeze(1),

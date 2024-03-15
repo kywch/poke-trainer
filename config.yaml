@@ -48,7 +48,7 @@ train:
   compile_mode: "reduce-overhead"
   float32_matmul_precision: "high"
   total_timesteps: 200_000_000
-  batch_size: 32768
+  batch_size: 65536
   learning_rate: 2.5e-4
   anneal_lr: True
   gamma: 0.998
@@ -66,9 +66,9 @@ train:
   bptt_horizon: 16 #8
   vf_clip_coef: 0.12 # 0.1
 
-  num_envs: 150
-  envs_per_worker: 2
-  envs_per_batch: 60
+  num_envs: 60
+  envs_per_worker: 1
+  envs_per_batch: 24
   env_pool: True
 
   verbose: True

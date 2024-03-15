@@ -32,6 +32,8 @@ class CustomRewardEnv(RedGymEnv):
                     low=0, high=255, shape=self.screen_output_shape, dtype=np.uint8
                 ),
                 # Discrete is more apt, but pufferlib is slower at processing Discrete
+                # "x": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
+                # "y": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
                 "curr_map_idx": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
                 "map_progress": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
                 "num_badge": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
@@ -48,9 +50,15 @@ class CustomRewardEnv(RedGymEnv):
         )
 
     def _get_obs(self):
+        # See pokemonred_puffer/map_data.json for map ids
+        player_x, player_y, map_idx = self.get_game_coords()
+        map_idx += 1  # map_id starts from -1 (Kanto) to 247 (Agathas room)
+
         return {
             "screen": self._get_screen_obs(),
-            "curr_map_idx": np.array(self._get_map_obs(), dtype=np.uint8),  # using 256 one-hot
+            # "x": np.array(player_x, dtype=np.uint8),
+            # "y": np.array(player_y, dtype=np.uint8),
+            "curr_map_idx": np.array(map_idx, dtype=np.uint8),  # using 256 one-hot
             "map_progress": np.array(self.max_map_progress, dtype=np.uint8),  # using 16 one-hot
             "num_badge": np.array(self.get_badges(), dtype=np.uint8),  # using 9 one-hot
             "party_size": np.array(self.party_size, dtype=np.uint8),  # using 8 one-hot -- CHECK ME: below 8?
@@ -59,10 +67,6 @@ class CustomRewardEnv(RedGymEnv):
             "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
         }
-
-    def _get_map_obs(self):
-        # see pokemonred_puffer/map_data.json for map ids
-        return self.read_m(0xD35E) + 1  # starts from -1 (Kanto) to 247 (Agathas room)
 
     def reset(self, seed: Optional[int] = None):
         self._reset_reward_vars()
@@ -94,10 +98,10 @@ class CustomRewardEnv(RedGymEnv):
             self.menu_reward_cooldown -= 1
 
         self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
-        if self.use_limited_reward:
-            # NOTE: only for HM cut now
-            #self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
-            pass
+        # if self.use_limited_reward:
+        #     # NOTE: only for HM cut now
+        #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
+        #     pass
 
         obs, rew, reset, _, info = super().step(action)
 
@@ -171,8 +175,8 @@ class CustomRewardEnv(RedGymEnv):
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
-            "explore": sum(self.seen_coords.values()) * 0.01,  # go to unvisited tiles
             "moves_obtained": sum(self.moves_obtained) * 0.01,  # try to learn new moves, via menuing?
+            "explore": sum(self.seen_coords.values()) * 0.0001,  # go to unvisited tiles
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
