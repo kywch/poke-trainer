@@ -18,7 +18,6 @@ class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
         self.event_obs = np.zeros(320, dtype=np.uint8)
-        self._reset_reward_vars()
 
         # NOTE: these are not yet used
         # self.explore_weight = reward_config["explore_weight"]
@@ -82,16 +81,30 @@ class CustomRewardEnv(RedGymEnv):
         self.bill_said_use_cell_separator = False
         self.got_hm01 = False
 
-        self._update_event_obs()
+        # Track learn moves with item
+        self.curr_moves = 0
+        self.curr_item_num = 0
+        self.moves_learned_with_item = 0
+
+        self._update_event_obs(reset=True)
         self.base_event_flags = self.event_obs.sum()
 
-    def _update_event_obs(self):
+    def _update_event_obs(self, reset=False):
         for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
             self.event_obs[i] = self.bit_count(self.read_m(addr))
 
         # Check KEY events
         self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
         self.got_hm01 = self.read_bit(0xD803, 0)
+
+        # Check learn moves with item -- could be spammed later, but it's fine for now
+        if not reset:
+            new_moves = self.moves_obtained.sum()
+            if new_moves > self.curr_moves:  # move learned
+                if self.read_m(0xD31D) < self.curr_item_num:  # item consumed
+                    self.moves_learned_with_item += 1
+            self.curr_moves = new_moves
+            self.curr_item_num = self.read_m(0xD31D)
 
     def step(self, action):
         if self.menu_reward_cooldown > 0:
@@ -110,6 +123,7 @@ class CustomRewardEnv(RedGymEnv):
         # NOTE: info is not always provided
         if "stats" in info:
             info["stats"]["under_limited_reward"] = self.use_limited_reward
+            info["stats"]["learn_with_item"] = self.moves_learned_with_item
 
         return obs, rew, reset, False, info
 
@@ -165,8 +179,15 @@ class CustomRewardEnv(RedGymEnv):
             "party_size": self.party_size * 3.0,
             "level": self.get_levels_reward(),
 
+            # Important skill: learning moves with items
+            "learn_with_item": self.moves_learned_with_item * 0.5,
+
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
+
+            # NOTE: this is main driver of progression
+            # but the weight is low because it's too frequent (~30k ish)
+            "explore": sum(self.seen_coords.values()) * 0.005,  # go to unvisited tiles
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
@@ -175,8 +196,7 @@ class CustomRewardEnv(RedGymEnv):
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
-            "moves_obtained": sum(self.moves_obtained) * 0.01,  # try to learn new moves, via menuing?
-            "explore": sum(self.seen_coords.values()) * 0.001,  # go to unvisited tiles
+            "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
@@ -217,14 +237,15 @@ class CustomRewardEnv(RedGymEnv):
         else:
             return level_cap + (self.max_level_sum - level_cap) / 4
 
+
     ##########################################################################
     # Scripting helpers below
 
-    def set_cursor_to_item(self, target_id=0xC4):  # 0xC4: HM cut
-        first_item = 0xD31E
-        for idx, offset in enumerate(range(0, 40, 2)):  # 20 items max?
-            item_id = self.read_m(first_item + offset)
-            if item_id == target_id:
-                # overwrite the cursor location (wListScrollOffset)
-                self.pyboy.set_memory_value(0xCC36, idx)
-                return
+    # def set_cursor_to_item(self, target_id=0xC4):  # 0xC4: HM cut
+    #     first_item = 0xD31E
+    #     for idx, offset in enumerate(range(0, 40, 2)):  # 20 items max?
+    #         item_id = self.read_m(first_item + offset)
+    #         if item_id == target_id:
+    #             # overwrite the cursor location (wListScrollOffset)
+    #             self.pyboy.set_memory_value(0xCC36, idx)
+    #             return
