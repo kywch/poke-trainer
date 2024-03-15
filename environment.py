@@ -176,7 +176,7 @@ class CustomRewardEnv(RedGymEnv):
             "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
             "moves_obtained": sum(self.moves_obtained) * 0.01,  # try to learn new moves, via menuing?
-            "explore": sum(self.seen_coords.values()) * 0.0001,  # go to unvisited tiles
+            "explore": sum(self.seen_coords.values()) * 0.001,  # go to unvisited tiles
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,

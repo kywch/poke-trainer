@@ -66,9 +66,9 @@ train:
   bptt_horizon: 16 #8
   vf_clip_coef: 0.12 # 0.1
 
-  num_envs: 60
+  num_envs: 80
   envs_per_worker: 1
-  envs_per_batch: 24
+  envs_per_batch: 32
   env_pool: True
 
   verbose: True
