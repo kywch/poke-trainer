@@ -153,7 +153,7 @@ class CustomRewardEnv(RedGymEnv):
             # Progress-related rewards
             "event": self.update_max_event_rew() * 1.0,  # not enough event with 0.3, also consider rewarding key events
             "badge": self.get_badges() * 10.0,
-            "key_events": self.get_key_events_reward() * 10.0,  # bill_said, got_hm01, taught_cut
+            "key_events": self.get_key_events_reward() * 3.0,  # bill_said, got_hm01, taught_cut
             "map_progress": self.max_map_progress * 3.0,
             "opponent_level": self.max_opponent_level * 2.0,
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
