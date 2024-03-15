@@ -167,7 +167,7 @@ class CustomRewardEnv(RedGymEnv):
             #"heal": self.total_heal_health,
 
             "explore": sum(self.seen_coords.values()) * 0.01,
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.1,  # from .02, to increase event occurance
+            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # from .02, to increase event occurance
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,
             # "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
 
