@@ -160,7 +160,7 @@ class CustomRewardEnv(RedGymEnv):
             # "caught_pokemon": sum(self.caught_pokemon) * 0.000010,
 
             # perhaps, only reward learning key moves? might have no room for cut
-            "moves_obtained": sum(self.moves_obtained) * 0.001,
+            "moves_obtained": sum(self.moves_obtained) * 1.0,  # perhaps this will help with learning cut?
             "level": self.get_levels_reward(),
             "party_size": self.party_size * 3.0,
             # "death_reward": self.died_count,
@@ -218,5 +218,5 @@ class CustomRewardEnv(RedGymEnv):
             item_id = self.read_m(first_item + offset)
             if item_id == target_id:
                 # overwrite the cursor location (wListScrollOffset)
-                self.write_m(0xCC36, idx)
+                self.pyboy.set_memory_value(0xCC36, idx)
                 return
