@@ -152,9 +152,9 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             # Main milestones for story progression
-            "badge": self.get_badges() * 10.0,
-            "map_progress": self.max_map_progress * 3.0,
-            "opponent_level": self.max_opponent_level * 2.0,
+            "badge": self.get_badges() * 3.0,
+            "map_progress": self.max_map_progress * 2.0,
+            "opponent_level": self.max_opponent_level * 1.0,
             "key_events": self.get_key_events_reward() * 0.5,  # bill_said, got_hm01, taught_cut
 
             # Party strength proxy
@@ -166,7 +166,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
-            "event": self.update_max_event_rew() * 1.0,  # not enough event with 0.3, also consider rewarding key events
+            "event": self.update_max_event_rew() * 1.0,
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
