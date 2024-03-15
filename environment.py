@@ -36,8 +36,12 @@ class CustomRewardEnv(RedGymEnv):
                 "map_progress": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
                 "num_badge": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
                 "party_size": spaces.Box(low=0, high=8, shape=(1,), dtype=np.uint8),
+                "seen_pokemon": spaces.Box(low=0, high=255, shape=(1,), dtype=np.uint8),
+
                 # TODO: probably need some level obs, for max/min/sum of the party?
                 #"direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),  # TODO: replace with tree in front
+
+                # NOTE: if there are other conditions for limited reward, more flags should be added
                 "under_limited_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
                 "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
             }
@@ -50,6 +54,7 @@ class CustomRewardEnv(RedGymEnv):
             "map_progress": np.array(self.max_map_progress, dtype=np.uint8),  # using 16 one-hot
             "num_badge": np.array(self.get_badges(), dtype=np.uint8),  # using 9 one-hot
             "party_size": np.array(self.party_size, dtype=np.uint8),  # using 8 one-hot -- CHECK ME: below 8?
+            "seen_pokemon": np.array(self.seen_pokemon.sum(), dtype=np.uint8),  # a great proxy for game progression
             #"direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
             "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
@@ -67,7 +72,11 @@ class CustomRewardEnv(RedGymEnv):
         self.max_event_rew = 0
         self.max_level_sum = 0
         self.use_limited_reward = False
-        self.limit_reward_cooldown = 0  # to prevent spamming limit reward
+        self.menu_reward_cooldown = 0  # to prevent spamming limit reward
+
+        # KEY events
+        self.bill_said_use_cell_separator = False
+        self.got_hm01 = False
 
         self._update_event_obs()
         self.base_event_flags = self.event_obs.sum()
@@ -76,10 +85,18 @@ class CustomRewardEnv(RedGymEnv):
         for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
             self.event_obs[i] = self.bit_count(self.read_m(addr))
 
+        # Check KEY events
+        self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
+        self.got_hm01 = self.read_bit(0xD803, 0)
+
     def step(self, action):
+        if self.menu_reward_cooldown > 0:
+            self.menu_reward_cooldown -= 1
+
         self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
-        if self.limit_reward_cooldown > 0:
-            self.limit_reward_cooldown -= 1
+        if self.use_limited_reward:
+            # NOTE: only for HM cut now
+            self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
 
         obs, rew, reset, _, info = super().step(action)
 
@@ -97,8 +114,8 @@ class CustomRewardEnv(RedGymEnv):
         # if has hm01 cut, then do not give normal reward until cut is learned
         if self.use_limited_reward:
             # encourage going to action bag menu with very small reward
-            if self.seen_action_bag_menu is True and self.limit_reward_cooldown == 0:
-                self.limit_reward_cooldown = 30
+            if self.seen_action_bag_menu is True and self.menu_reward_cooldown == 0:
+                self.menu_reward_cooldown = 30
                 return 0.0001
 
             return 0
@@ -135,7 +152,8 @@ class CustomRewardEnv(RedGymEnv):
         return {
             # Progress-related rewards
             "event": self.update_max_event_rew() * 1.0,  # not enough event with 0.3, also consider rewarding key events
-            "badge": self.get_badges() * 5,
+            "badge": self.get_badges() * 10.0,
+            "key_events": self.get_key_events_reward() * 10.0,  # bill_said, got_hm01, taught_cut
             "map_progress": self.max_map_progress * 3.0,
             "opponent_level": self.max_opponent_level * 2.0,
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
@@ -149,11 +167,10 @@ class CustomRewardEnv(RedGymEnv):
             #"heal": self.total_heal_health,
 
             "explore": sum(self.seen_coords.values()) * 0.01,
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.02,
+            "explore_npcs": sum(self.seen_npcs.values()) * 0.1,  # from .02, to increase event occurance
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,
             # "explore_maps": np.sum(self.seen_map_ids) * 0.0001,
 
-            "taught_cut": 4 * int(self.taught_cut),
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
             "cut_tiles": len(self.cut_tiles) * 1.0,
         }
@@ -172,6 +189,15 @@ class CustomRewardEnv(RedGymEnv):
             0,
         )
 
+    def get_key_events_reward(self):
+        return sum(
+            [
+                self.bill_said_use_cell_separator,
+                self.got_hm01,
+                self.taught_cut,
+            ]
+        )
+
     def get_levels_reward(self, level_cap=15):
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
@@ -182,3 +208,15 @@ class CustomRewardEnv(RedGymEnv):
             return self.max_level_sum
         else:
             return level_cap + (self.max_level_sum - level_cap) / 4
+
+    ##########################################################################
+    # Scripting helpers below
+
+    def set_cursor_to_item(self, target_id=0xC4):  # 0xC4: HM cut
+        first_item = 0xD31E
+        for idx, offset in enumerate(range(0, 40, 2)):  # 20 items max?
+            item_id = self.read_m(first_item + offset)
+            if item_id == target_id:
+                # overwrite the cursor location (wListScrollOffset)
+                self.write_m(0xCC36, idx)
+                return
