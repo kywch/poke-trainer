@@ -96,7 +96,8 @@ class CustomRewardEnv(RedGymEnv):
         self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
         if self.use_limited_reward:
             # NOTE: only for HM cut now
-            self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
+            #self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
+            pass
 
         obs, rew, reset, _, info = super().step(action)
 
