@@ -155,7 +155,7 @@ class CustomRewardEnv(RedGymEnv):
             "badge": self.get_badges() * 10.0,
             "map_progress": self.max_map_progress * 3.0,
             "opponent_level": self.max_opponent_level * 2.0,
-            "key_events": self.get_key_events_reward() * 1.0,  # bill_said, got_hm01, taught_cut
+            "key_events": self.get_key_events_reward() * 0.5,  # bill_said, got_hm01, taught_cut
 
             # Party strength proxy
             "party_size": self.party_size * 3.0,
