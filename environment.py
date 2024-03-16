@@ -79,6 +79,7 @@ class CustomRewardEnv(RedGymEnv):
         self.use_limited_reward = False
 
         # KEY events
+        self.badges = 0
         self.bill_said_use_cell_separator = False
         self.got_hm01 = False
 
@@ -95,6 +96,11 @@ class CustomRewardEnv(RedGymEnv):
         self.moves_learned_with_item = 0
         self.just_learned_item_move = 0
 
+        # Track seen coords for each badge
+        self.seen_coord_after_badge = {
+            0: {"coords": set(), "prev_badge": 0}
+        }
+
         self._update_event_obs(reset=True)
         self.base_event_flags = self.event_obs.sum()
 
@@ -103,6 +109,7 @@ class CustomRewardEnv(RedGymEnv):
             self.event_obs[i] = self.bit_count(self.read_m(addr))
 
         # Check KEY events
+        self.badges = self.get_badges()
         self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
         self.got_hm01 = self.read_bit(0xD803, 0)
 
@@ -130,6 +137,18 @@ class CustomRewardEnv(RedGymEnv):
             self.curr_moves = new_moves
             self.curr_item_num = self.read_m(0xD31D)
 
+            # Seen coords for each badge
+            if self.badges not in self.seen_coord_after_badge:
+                # got new badge, so create new entry
+                prev_seen = self.seen_coord_after_badge[self.badges-1]
+                self.seen_coord_after_badge[self.badges] = {
+                    {
+                        "coords": set(),
+                        "prev_badge": prev_seen["prev_badge"] + np.sqrt(len(prev_seen["coords"]))
+                    }
+                }
+            self.seen_coord_after_badge[self.badges]["coords"].add(self.get_game_coords())
+
     def step(self, action):
         if self.menu_reward_cooldown > 0:
             self.menu_reward_cooldown -= 1
@@ -152,6 +171,7 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["rewarded_action_bag_menu"] = self.rewarded_action_bag_menu
             info["stats"]["pokemon_action_count"] = self.pokemon_action_count
             info["stats"]["rewared_pokemon_action"] = self.rewared_pokemon_action
+            info["stats"]["seen_coord_after_badge"] = len(self.seen_coord_after_badge[self.badges]["coords"])
 
         return obs, rew, reset, False, info
 
@@ -201,7 +221,7 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             # Main milestones for story progression
-            "badge": self.get_badges() * 3.0,
+            "badge": self.badges * 3.0,
             "map_progress": self.max_map_progress * 2.0,
             "opponent_level": self.max_opponent_level * 1.0,
             "key_events": self.get_key_events_reward() * 0.5,  # bill_said, got_hm01, taught_cut
@@ -216,9 +236,9 @@ class CustomRewardEnv(RedGymEnv):
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
 
-            # NOTE: this is main driver of progression
-            # but the weight is low because it's too frequent (order of 1000s)
-            "explore": sum(self.seen_coords.values()) * 0.01,  # go to unvisited tiles
+            # NOTE: exploring unseen tiles is the main driver of progression
+            # but only up to some extent. so taking sqrt(seen coords after badge) + prev sums
+            "explore": self.get_explore_coords_reward() * 0.5,
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
@@ -235,6 +255,10 @@ class CustomRewardEnv(RedGymEnv):
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
             "cut_tiles": len(self.cut_tiles) * 1.0,
         }
+
+    def get_explore_coords_reward(self):
+        return np.sqrt(len(self.seen_coord_after_badge[self.badges]["coords"])) + \
+               self.seen_coord_after_badge[self.badges]["prev_badge"]
 
     def update_max_event_rew(self):
         cur_rew = self.get_all_events_reward()
