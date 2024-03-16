@@ -14,7 +14,7 @@ from pokemonred_puffer.environment import (
 MUSEUM_TICKET = (0xD754, 0)
 
 MENU_COOLDOWN = 300
-
+PRESS_BUTTON_A = 5
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
@@ -85,6 +85,8 @@ class CustomRewardEnv(RedGymEnv):
         # Track action bag menu
         self.action_bag_menu_count = 0
         self.rewarded_action_bag_menu = 0
+        self.pokemon_action_count = 0
+        self.rewared_pokemon_action = 0
         self.menu_reward_cooldown = 0  # to prevent spamming limit reward
 
         # Track learn moves with item
@@ -96,7 +98,7 @@ class CustomRewardEnv(RedGymEnv):
         self._update_event_obs(reset=True)
         self.base_event_flags = self.event_obs.sum()
 
-    def _update_event_obs(self, reset=False):
+    def _update_event_obs(self, reset=False, action=None):
         for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
             self.event_obs[i] = self.bit_count(self.read_m(addr))
 
@@ -105,17 +107,18 @@ class CustomRewardEnv(RedGymEnv):
         self.got_hm01 = self.read_bit(0xD803, 0)
 
         if reset is False:
-            # Check menu
-            if self.menu_reward_cooldown == 0:
-                # Encourage opening bag menu first
-                if self.seen_bag_menu > 0 and self.action_bag_menu_count < 5:
+            # Check menu action
+            if action is not None and action == PRESS_BUTTON_A:
+                if self.check_if_in_bag_menu():
                     self.action_bag_menu_count += 1
-                    self.rewarded_action_bag_menu += 1
-                    self.menu_reward_cooldown = MENU_COOLDOWN
-                if self.seen_action_bag_menu > 0:
-                    self.action_bag_menu_count += 1
-                    self.rewarded_action_bag_menu += 1
-                    self.menu_reward_cooldown = MENU_COOLDOWN
+                    if self.menu_reward_cooldown == 0:
+                        self.rewarded_action_bag_menu += 1
+                        self.menu_reward_cooldown = MENU_COOLDOWN
+                if self.check_if_in_pokemon_menu():
+                    self.pokemon_action_count += 1
+                    if self.menu_reward_cooldown == 0:
+                        self.rewared_pokemon_action += 1
+                        self.menu_reward_cooldown = MENU_COOLDOWN
 
             # Check learn moves with item -- could be spammed later, but it's fine for now
             new_moves = self.moves_obtained.sum()
@@ -139,7 +142,7 @@ class CustomRewardEnv(RedGymEnv):
 
         obs, rew, reset, _, info = super().step(action)
 
-        self._update_event_obs()
+        self._update_event_obs(action=action)
 
         # NOTE: info is not always provided
         if "stats" in info:
@@ -147,6 +150,8 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["learn_with_item"] = self.moves_learned_with_item
             info["stats"]["action_bag_menu_count"] = self.action_bag_menu_count
             info["stats"]["rewarded_action_bag_menu"] = self.rewarded_action_bag_menu
+            info["stats"]["pokemon_action_count"] = self.pokemon_action_count
+            info["stats"]["rewared_pokemon_action"] = self.rewared_pokemon_action
 
         return obs, rew, reset, False, info
 
@@ -223,7 +228,8 @@ class CustomRewardEnv(RedGymEnv):
             "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
             "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
-            "action_bag_menu": self.rewarded_action_bag_menu * 0.001,  # try to use items, via menuing?
+            "bag_menu_action": self.rewarded_action_bag_menu * 0.001,  # try to use items, via menuing?
+            "pokemon_menu_action": self.rewared_pokemon_action * 0.001,  # try to use items, via menuing?
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
