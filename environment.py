@@ -186,8 +186,8 @@ class CustomRewardEnv(RedGymEnv):
             # These kick in when agent is "stuck"
 
             # NOTE: this is main driver of progression
-            # but the weight is low because it's too frequent (~30k ish)
-            "explore": sum(self.seen_coords.values()) * 0.005,  # go to unvisited tiles
+            # but the weight is low because it's too frequent (order of 1000s)
+            "explore": sum(self.seen_coords.values()) * 0.01,  # go to unvisited tiles
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
