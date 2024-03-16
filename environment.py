@@ -247,8 +247,10 @@ class CustomRewardEnv(RedGymEnv):
             "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
-            "bag_menu_action": self.rewarded_action_bag_menu * 0.001,
-            "pokemon_menu_action": self.rewared_pokemon_action * 0.001,
+
+            # Make these better than nothing, but do not let these be larger than the above
+            "bag_menu_action": self.rewarded_action_bag_menu * 0.00001,
+            "pokemon_menu_action": self.rewared_pokemon_action * 0.00001,
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
