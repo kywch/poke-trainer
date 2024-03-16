@@ -237,7 +237,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # NOTE: exploring unseen tiles is the main driver of progression
             # but only up to some extent. so taking sqrt(seen coords after badge) + prev sums
-            "explore": self.get_explore_coords_reward() * 0.03,
+            "explore": self.get_explore_coords_reward() * 0.05,
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
@@ -247,8 +247,8 @@ class CustomRewardEnv(RedGymEnv):
             "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
-            "bag_menu_action": self.rewarded_action_bag_menu * 0.001,  # try to use items, via menuing?
-            "pokemon_menu_action": self.rewared_pokemon_action * 0.001,  # try to use items, via menuing?
+            "bag_menu_action": self.rewarded_action_bag_menu * 0.001,
+            "pokemon_menu_action": self.rewared_pokemon_action * 0.001,
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
