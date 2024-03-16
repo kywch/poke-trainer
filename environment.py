@@ -144,7 +144,7 @@ class CustomRewardEnv(RedGymEnv):
                 prev_seen = self.seen_coord_after_badge[self.badges-1]
                 self.seen_coord_after_badge[self.badges] = {
                     "coords": set(),
-                    "prev_badge": prev_seen["prev_badge"] + len(prev_seen["coords"]) ** SEEN_COORD_MULTIPLIER
+                    "prev_badge": prev_seen["prev_badge"] + len(prev_seen["coords"])  # ** SEEN_COORD_MULTIPLIER
                 }
             self.seen_coord_after_badge[self.badges]["coords"].add(self.get_game_coords())
 
