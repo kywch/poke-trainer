@@ -15,7 +15,7 @@ MUSEUM_TICKET = (0xD754, 0)
 
 MENU_COOLDOWN = 300
 PRESS_BUTTON_A = 5
-SEEN_COORD_MULTIPLIER = 0.9
+SEEN_COORD_MULTIPLIER = 0.8
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
@@ -237,7 +237,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # NOTE: exploring unseen tiles is the main driver of progression
             # but only up to some extent. so taking sqrt(seen coords after badge) + prev sums
-            "explore": self.get_explore_coords_reward() * 0.03,
+            "explore": self.get_explore_coords_reward() * 0.05,
 
             # First, always search for new events, and perhaps new pokemon
             "event": self.update_max_event_rew() * 2.0,  # more related to story progression?
@@ -256,8 +256,13 @@ class CustomRewardEnv(RedGymEnv):
         }
 
     def get_explore_coords_reward(self):
+        discount_power = SEEN_COORD_MULTIPLIER
+        #          1000    2000    3000    -> used 0.01 with linear scaling
+        # ** 0.90:  501     935    1347
+        # ** 0.85:  355     640     903
+        # ** 0.80:  251     437     605
         return self.seen_coord_after_badge[self.badges]["prev_badge"] + \
-               len(self.seen_coord_after_badge[self.badges]["coords"]) ** SEEN_COORD_MULTIPLIER
+               len(self.seen_coord_after_badge[self.badges]["coords"]) ** discount_power
 
     def update_max_event_rew(self):
         cur_rew = self.get_all_events_reward()
