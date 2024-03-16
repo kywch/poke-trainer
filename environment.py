@@ -241,7 +241,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
-            "event": self.update_max_event_rew() * 1.0,
+            "event": self.update_max_event_rew() * 1.5,  # more related to story progression?
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
