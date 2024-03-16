@@ -142,10 +142,8 @@ class CustomRewardEnv(RedGymEnv):
                 # got new badge, so create new entry
                 prev_seen = self.seen_coord_after_badge[self.badges-1]
                 self.seen_coord_after_badge[self.badges] = {
-                    {
-                        "coords": set(),
-                        "prev_badge": prev_seen["prev_badge"] + np.sqrt(len(prev_seen["coords"]))
-                    }
+                    "coords": set(),
+                    "prev_badge": prev_seen["prev_badge"] + np.sqrt(len(prev_seen["coords"]))
                 }
             self.seen_coord_after_badge[self.badges]["coords"].add(self.get_game_coords())
 
@@ -238,7 +236,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # NOTE: exploring unseen tiles is the main driver of progression
             # but only up to some extent. so taking sqrt(seen coords after badge) + prev sums
-            "explore": self.get_explore_coords_reward() * 0.5,
+            "explore": self.get_explore_coords_reward() * 0.3,
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
