@@ -15,7 +15,7 @@ MUSEUM_TICKET = (0xD754, 0)
 
 MENU_COOLDOWN = 300
 PRESS_BUTTON_A = 5
-SEEN_COORD_MULTIPLIER = 0.8
+SEEN_COORD_MULTIPLIER = 0.85
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
@@ -220,7 +220,7 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             # Main milestones for story progression
-            "badge": self.badges * 3.0,
+            "badge": self.badges * 10.0,
             "map_progress": self.max_map_progress * 2.0,
             "opponent_level": self.max_opponent_level * 1.0,
             "key_events": self.get_key_events_reward() * 0.5,  # bill_said, got_hm01, taught_cut
@@ -239,9 +239,9 @@ class CustomRewardEnv(RedGymEnv):
             # but only up to some extent. so taking sqrt(seen coords after badge) + prev sums
             "explore": self.get_explore_coords_reward() * 0.05,
 
-            # First, always search for new pokemon or events
+            # First, always search for new events, and perhaps new pokemon
+            "event": self.update_max_event_rew() * 2.0,  # more related to story progression?
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
-            "event": self.update_max_event_rew() * 1.5,  # more related to story progression?
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
