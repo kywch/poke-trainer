@@ -104,13 +104,18 @@ class CustomRewardEnv(RedGymEnv):
         self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
         self.got_hm01 = self.read_bit(0xD803, 0)
 
-        if not reset:
-            # Check action bag menu
-            if self.seen_action_bag_menu > 0:
-                self.action_bag_menu_count += 1
-                if self.menu_reward_cooldown == 0:
-                    self.menu_reward_cooldown = MENU_COOLDOWN
+        if reset is False:
+            # Check menu
+            if self.menu_reward_cooldown == 0:
+                # Encourage opening bag menu first
+                if self.seen_bag_menu > 0 and self.action_bag_menu_count < 5:
+                    self.action_bag_menu_count += 1
                     self.rewarded_action_bag_menu += 1
+                    self.menu_reward_cooldown = MENU_COOLDOWN
+                if self.seen_action_bag_menu > 0:
+                    self.action_bag_menu_count += 1
+                    self.rewarded_action_bag_menu += 1
+                    self.menu_reward_cooldown = MENU_COOLDOWN
 
             # Check learn moves with item -- could be spammed later, but it's fine for now
             new_moves = self.moves_obtained.sum()
