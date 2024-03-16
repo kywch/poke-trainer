@@ -15,6 +15,7 @@ MUSEUM_TICKET = (0xD754, 0)
 
 MENU_COOLDOWN = 300
 PRESS_BUTTON_A = 5
+SEEN_COORD_MULTIPLIER = 0.8
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
@@ -143,7 +144,7 @@ class CustomRewardEnv(RedGymEnv):
                 prev_seen = self.seen_coord_after_badge[self.badges-1]
                 self.seen_coord_after_badge[self.badges] = {
                     "coords": set(),
-                    "prev_badge": prev_seen["prev_badge"] + np.sqrt(len(prev_seen["coords"]))
+                    "prev_badge": prev_seen["prev_badge"] + len(prev_seen["coords"]) ** SEEN_COORD_MULTIPLIER
                 }
             self.seen_coord_after_badge[self.badges]["coords"].add(self.get_game_coords())
 
@@ -236,15 +237,15 @@ class CustomRewardEnv(RedGymEnv):
 
             # NOTE: exploring unseen tiles is the main driver of progression
             # but only up to some extent. so taking sqrt(seen coords after badge) + prev sums
-            "explore": self.get_explore_coords_reward() * 0.3,
+            "explore": self.get_explore_coords_reward() * 0.03,
 
             # First, always search for new pokemon or events
             "seen_pokemon": sum(self.seen_pokemon) * 1.0,
             "event": self.update_max_event_rew() * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
-            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
+            "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
+            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
             "bag_menu_action": self.rewarded_action_bag_menu * 0.001,  # try to use items, via menuing?
             "pokemon_menu_action": self.rewared_pokemon_action * 0.001,  # try to use items, via menuing?
@@ -255,8 +256,8 @@ class CustomRewardEnv(RedGymEnv):
         }
 
     def get_explore_coords_reward(self):
-        return np.sqrt(len(self.seen_coord_after_badge[self.badges]["coords"])) + \
-               self.seen_coord_after_badge[self.badges]["prev_badge"]
+        return self.seen_coord_after_badge[self.badges]["prev_badge"] + \
+               len(self.seen_coord_after_badge[self.badges]["coords"]) ** SEEN_COORD_MULTIPLIER
 
     def update_max_event_rew(self):
         cur_rew = self.get_all_events_reward()
