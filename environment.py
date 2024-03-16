@@ -220,9 +220,9 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             # Main milestones for story progression
-            "badge": self.badges * 10.0,
-            "map_progress": self.max_map_progress * 3.0,
-            "opponent_level": self.max_opponent_level * 2.0,
+            "badge": self.badges * 5.0,
+            "map_progress": self.max_map_progress * 2.0,
+            #"opponent_level": self.max_opponent_level * 1.0,
             "key_events": self.get_key_events_reward() * 0.5,  # bill_said, got_hm01, taught_cut
 
             # Party strength proxy
@@ -236,7 +236,7 @@ class CustomRewardEnv(RedGymEnv):
             # These kick in when agent is "stuck"
 
             # NOTE: exploring unseen tiles is the main driver of progression
-            "explore": self.get_explore_coords_reward() * 0.01,
+            "explore": self.get_explore_coords_reward() * 0.012,
 
             # First, always search for new pokemon and events
             "seen_pokemon": sum(self.seen_pokemon) * 1.5,  # more related to story progression?
