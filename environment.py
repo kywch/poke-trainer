@@ -83,6 +83,7 @@ class CustomRewardEnv(RedGymEnv):
         return super().reset(seed)
 
     def _reset_reward_vars(self):
+        self.event_obs.fill(0)
         self.max_event_rew = 0
         self.max_level_sum = 0
         self.use_limited_reward = False
@@ -105,7 +106,6 @@ class CustomRewardEnv(RedGymEnv):
         self.moves_learned_with_item = 0
         self.just_learned_item_move = 0
 
-        self.event_obs.fill(0)
         self._update_event_obs(reset=True)
         self.base_event_flags = self.event_obs.sum()
 
