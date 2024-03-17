@@ -11,7 +11,8 @@ from pokemonred_puffer.environment import (
     PARTY_LEVEL_ADDRS,
 )
 
-MUSEUM_TICKET = (0xD754, 0)
+#MUSEUM_TICKET = (0xD754, 0)
+BASE_EVENT_COUNT = 4  # Bulbasaur state starts with 4 non-zero event addresses
 
 MENU_COOLDOWN = 300
 PRESS_BUTTON_A = 5
@@ -20,8 +21,12 @@ PRESS_BUTTON_A = 5
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
-        self.event_obs = np.zeros(320, dtype=np.uint8)
         self.init_max_steps = env_config.max_steps
+
+        #self.event_obs = np.zeros(320, dtype=np.uint8)
+        self.event_count = {}  # kept for whole training run, take this when checkpointing
+        self.experienced_events = set()  # reset every episode
+        self.event_reward = 0
 
         # NOTE: these are not yet used
         # self.explore_weight = reward_config["explore_weight"]
@@ -83,10 +88,15 @@ class CustomRewardEnv(RedGymEnv):
         return super().reset(seed)
 
     def _reset_reward_vars(self):
-        self.event_obs.fill(0)
-        self.max_event_rew = 0
-        self.max_level_sum = 0
         self.use_limited_reward = False
+
+        #self.event_obs.fill(0)
+        self.experienced_events.clear()
+        self.event_reward = 0
+        self.max_event_rew = 0
+        self._update_event_obs()
+
+        self.max_level_sum = 0
 
         # KEY events
         self.badges = 0
@@ -105,9 +115,6 @@ class CustomRewardEnv(RedGymEnv):
         self.curr_item_num = 0
         self.moves_learned_with_item = 0
         self.just_learned_item_move = 0
-
-        self._update_event_obs()
-        self.base_event_flags = self.event_obs.sum()
 
     def step(self, action):
         if self.menu_reward_cooldown > 0:
@@ -133,7 +140,7 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["rewared_pokemon_action"] = self.rewared_pokemon_action
 
             # Does the events get correctly reset?
-            info["stats"]["base_event_flags"] = self.base_event_flags  # should be constant throughout
+            info["stats"]["new_event_reward"] = self.event_reward
 
         return obs, rew, reset, False, info
 
@@ -205,7 +212,12 @@ class CustomRewardEnv(RedGymEnv):
 
             # First, always search for new pokemon and events
             "seen_pokemon": sum(self.seen_pokemon) * 1.5,  # more related to story progression?
-            "event": self.max_event_rew * 1.0,  # there seems to be a lot of irrevant events?
+
+            # NOTE: there seems to be a lot of irrevant events?
+            # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
+            # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
+            # after seeing this, implemented the experienced reward discounting
+            "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
@@ -223,14 +235,25 @@ class CustomRewardEnv(RedGymEnv):
 
     def _update_event_obs(self):
         for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
-            self.event_obs[i] = self.bit_count(self.read_m(addr))
+            # NOTE: event obs is NOT binary, so we may miss some information there
+            # self.event_obs[i] = self.bit_count(self.read_m(addr))
+            if self.read_m(addr) > 0 and addr not in self.experienced_events:
+                self.experienced_events.add(addr)
+
+                # Update event count, which is kept for the whole training run
+                if addr not in self.event_count:
+                    self.event_count[addr] = 1
+                else:
+                    self.event_count[addr] += 1
+
+                # Give reward for each event (addr), but discount for experienced events
+                self.event_reward += 1 / self.event_count[addr]
 
     def _update_event_reward_vars(self):
         self._update_event_obs()
 
-        # Adds up all event flags, exclude museum ticket
-        cur_rew = max(self.event_obs.sum() - self.base_event_flags - int(self.read_bit(*MUSEUM_TICKET)), 0)
-        self.max_event_rew = max(cur_rew, self.max_event_rew)
+        cur_rew = max(self.event_reward - BASE_EVENT_COUNT, 0)
+        self.max_event_rew = max(cur_rew, self.max_event_rew)  # do we need this?
 
         # Check KEY events
         self.badges = self.get_badges()
