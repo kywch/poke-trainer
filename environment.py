@@ -27,6 +27,11 @@ class CustomRewardEnv(RedGymEnv):
         # self.explore_npc_weight = reward_config["explore_npc_weight"]
         # self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
 
+        # TODO: try to use step_forget_explore() later
+        #       dynamic is somewhat complicated
+        # self.step_forgetting_factor = reward_config.step_forgetting_factor
+        # self.forgetting_frequency = reward_config.forgetting_frequency
+
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
             {
@@ -219,7 +224,8 @@ class CustomRewardEnv(RedGymEnv):
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
 
-            # NOTE: exploring unseen tiles is the main driver of progression
+            # NOTE: exploring "newer" tiles is the main driver of progression
+            # Visit decay makes the explore reward "dense" ... little reward everywhere
             "explore": self.get_explore_coords_reward() * 0.01,
 
             # First, always search for new pokemon and events
@@ -242,7 +248,7 @@ class CustomRewardEnv(RedGymEnv):
 
     def get_explore_coords_reward(self):
         # NOTE: seen_coords values are continuously decayed (see DecayWrapper)
-        # so agents should explore new coords and/or revisit old coords pretty hard
+        # so agents are motivated to explore new coords and/or revisit old coords
         return sum(self.seen_coords.values())
 
     def update_max_event_rew(self):
@@ -278,6 +284,28 @@ class CustomRewardEnv(RedGymEnv):
             return self.max_level_sum
         else:
             return level_cap + (self.max_level_sum - level_cap) / 4
+
+    # Yes. This wrapper mutates the env.
+    # Is that good? No.
+    # Am I doing it anyway? Yes.
+    # Why? To save memory
+    def step_forget_explore(self):
+        self.seen_coords.update(
+            (k, max(0.15, v * (self.step_forgetting_factor["coords"])))
+            for k, v in self.seen_coords.items()
+        )
+        self.seen_npcs.update(
+            (k, max(0.15, v * (self.step_forgetting_factor["npc"])))
+            for k, v in self.seen_npcs.items()
+        )
+
+        # NOTE: potentially useful?
+        # self.seen_map_ids *= self.step_forgetting_factor["map_ids"]
+        # self.explore_map *= self.step_forgetting_factor["explore"]
+        # self.explore_map[self.explore_map > 0] = np.clip(
+        #     self.explore_map[self.explore_map > 0], 0.15, 1
+        # )
+
 
 
     ##########################################################################
