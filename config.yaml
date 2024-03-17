@@ -7,6 +7,8 @@ debug:
   env:
     headless: False
     stream_wrapper: False
+    max_steps: 1024
+    init_state: cut
   train:
     device: cuda
     compile: False
@@ -17,7 +19,7 @@ debug:
     batch_size: 128
     batch_rows: 32
     bptt_horizon: 4
-    total_timesteps: 1000
+    total_timesteps: 2000
     save_overlay: True
     overlay_interval: 4
     save_checkpoint: True

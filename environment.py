@@ -106,41 +106,8 @@ class CustomRewardEnv(RedGymEnv):
         self.moves_learned_with_item = 0
         self.just_learned_item_move = 0
 
-        self._update_event_obs(reset=True)
+        self._update_event_obs()
         self.base_event_flags = self.event_obs.sum()
-
-    def _update_event_obs(self, reset=False, action=None):
-        for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
-            self.event_obs[i] = self.bit_count(self.read_m(addr))
-
-        # Check KEY events
-        self.badges = self.get_badges()
-        self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
-        self.got_hm01 = self.read_bit(0xD803, 0)
-
-        if reset is False:
-            # Check menu action
-            if action is not None and action == PRESS_BUTTON_A:
-                if self.check_if_in_bag_menu():
-                    self.action_bag_menu_count += 1
-                    if self.menu_reward_cooldown == 0:
-                        self.rewarded_action_bag_menu += 1
-                        self.menu_reward_cooldown = MENU_COOLDOWN
-                if self.check_if_in_pokemon_menu():
-                    self.pokemon_action_count += 1
-                    if self.menu_reward_cooldown == 0:
-                        self.rewared_pokemon_action += 1
-                        self.menu_reward_cooldown = MENU_COOLDOWN
-
-            # Check learn moves with item -- could be spammed later, but it's fine for now
-            new_moves = self.moves_obtained.sum()
-            self.just_learned_item_move = 0
-            if new_moves > self.curr_moves:  # move learned
-                if self.read_m(0xD31D) < self.curr_item_num:  # item consumed
-                    self.moves_learned_with_item += 1
-                    self.just_learned_item_move = 1
-            self.curr_moves = new_moves
-            self.curr_item_num = self.read_m(0xD31D)
 
     def step(self, action):
         if self.menu_reward_cooldown > 0:
@@ -154,7 +121,7 @@ class CustomRewardEnv(RedGymEnv):
 
         obs, rew, reset, _, info = super().step(action)
 
-        self._update_event_obs(action=action)
+        self._update_menu_reward_vars(action)
 
         # NOTE: info is not always provided
         if "stats" in info:
@@ -169,6 +136,20 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["base_event_flags"] = self.base_event_flags  # should be constant throughout
 
         return obs, rew, reset, False, info
+
+    def _update_menu_reward_vars(self, action):
+        # Check menu action
+        if action is not None and action == PRESS_BUTTON_A:
+            if self.check_if_in_bag_menu():
+                self.action_bag_menu_count += 1
+                if self.menu_reward_cooldown == 0:
+                    self.rewarded_action_bag_menu += 1
+                    self.menu_reward_cooldown = MENU_COOLDOWN
+            if self.check_if_in_pokemon_menu():
+                self.pokemon_action_count += 1
+                if self.menu_reward_cooldown == 0:
+                    self.rewared_pokemon_action += 1
+                    self.menu_reward_cooldown = MENU_COOLDOWN
 
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
@@ -193,33 +174,19 @@ class CustomRewardEnv(RedGymEnv):
         self.total_reward = new_total
         return new_step
 
-    # def got_hm01_cut_but_not_learned_yet(self):
-    #     # prev events that need to be true
-    #     prev_events = [
-    #         self.read_bit(0xD7F1, 0),  # met bill
-    #         self.read_bit(0xD7F2, 3),  # used cell separator on bill
-    #         self.read_bit(0xD7F2, 4),  # ss ticket
-    #         self.read_bit(0xD7F2, 5),  # met bill 2
-    #         self.read_bit(0xD7F2, 6),  # bill said use cell separator
-    #         self.read_bit(0xD7F2, 7),  # left bills house after helping
-    #     ]
-
-    #     got_hm01 = self.read_bit(0xD803, 0)
-    #     rubbed_captain = self.read_bit(0xD803, 1)
-
-    #     return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
-
     # TODO: make the reward weights configurable
     def get_game_state_reward(self, print_stats=False):
         # addresses from https://datacrystal.romhacking.net/wiki/Pok%C3%A9mon_Red/Blue:RAM_map
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
+
+        self._update_event_reward_vars()
 
         return {
             # Main milestones for story progression
             "badge": self.badges * 5.0,
             "map_progress": self.max_map_progress * 2.0,
             #"opponent_level": self.max_opponent_level * 1.0,
-            "key_events": self.get_key_events_reward() * 0.5,  # bill_said, got_hm01, taught_cut
+            "key_events": self.key_events_reward * 0.5,  # bill_said, got_hm01, taught_cut
 
             # Party strength proxy
             "party_size": self.party_size * 3.0,
@@ -233,11 +200,12 @@ class CustomRewardEnv(RedGymEnv):
 
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
-            "explore": self.get_explore_coords_reward() * 0.01,
+            # so agents are motivated to explore new coords and/or revisit old coords
+            "explore": sum(self.seen_coords.values()) * 0.01,
 
             # First, always search for new pokemon and events
             "seen_pokemon": sum(self.seen_pokemon) * 1.5,  # more related to story progression?
-            "event": self.update_max_event_rew() * 1.0,  # there seems to be a lot of irrevant events?
+            "event": self.max_event_rew * 1.0,  # there seems to be a lot of irrevant events?
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
@@ -253,26 +221,34 @@ class CustomRewardEnv(RedGymEnv):
             "cut_tiles": len(self.cut_tiles) * 1.0,
         }
 
-    def get_explore_coords_reward(self):
-        # NOTE: seen_coords values are continuously decayed (see DecayWrapper)
-        # so agents are motivated to explore new coords and/or revisit old coords
-        return sum(self.seen_coords.values())
+    def _update_event_obs(self):
+        for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
+            self.event_obs[i] = self.bit_count(self.read_m(addr))
 
-    def update_max_event_rew(self):
-        cur_rew = self.get_all_events_reward()
+    def _update_event_reward_vars(self):
+        self._update_event_obs()
+
+        # Adds up all event flags, exclude museum ticket
+        cur_rew = max(self.event_obs.sum() - self.base_event_flags - int(self.read_bit(*MUSEUM_TICKET)), 0)
         self.max_event_rew = max(cur_rew, self.max_event_rew)
-        return self.max_event_rew
 
-    def get_all_events_reward(self):
-        # adds up all event flags, exclude museum ticket
-        return max(
-            self.event_obs.sum()
-            - self.base_event_flags
-            - int(self.read_bit(*MUSEUM_TICKET)),
-            0,
-        )
+        # Check KEY events
+        self.badges = self.get_badges()
+        self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
+        self.got_hm01 = self.read_bit(0xD803, 0)
 
-    def get_key_events_reward(self):
+        # Check learn moves with item -- could be spammed later, but it's fine for now
+        new_moves = self.moves_obtained.sum()
+        self.just_learned_item_move = 0
+        if new_moves > self.curr_moves:  # move learned
+            if self.read_m(0xD31D) < self.curr_item_num:  # item consumed
+                self.moves_learned_with_item += 1
+                self.just_learned_item_move = 1
+        self.curr_moves = new_moves
+        self.curr_item_num = self.read_m(0xD31D)
+
+    @property
+    def key_events_reward(self):
         return sum(
             [
                 self.bill_said_use_cell_separator,
@@ -291,6 +267,27 @@ class CustomRewardEnv(RedGymEnv):
             return self.max_level_sum
         else:
             return level_cap + (self.max_level_sum - level_cap) / 4
+
+
+
+
+    ##########################################################################
+
+    # def got_hm01_cut_but_not_learned_yet(self):
+    #     # prev events that need to be true
+    #     prev_events = [
+    #         self.read_bit(0xD7F1, 0),  # met bill
+    #         self.read_bit(0xD7F2, 3),  # used cell separator on bill
+    #         self.read_bit(0xD7F2, 4),  # ss ticket
+    #         self.read_bit(0xD7F2, 5),  # met bill 2
+    #         self.read_bit(0xD7F2, 6),  # bill said use cell separator
+    #         self.read_bit(0xD7F2, 7),  # left bills house after helping
+    #     ]
+
+    #     got_hm01 = self.read_bit(0xD803, 0)
+    #     rubbed_captain = self.read_bit(0xD803, 1)
+
+    #     return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
 
     # Yes. This wrapper mutates the env.
     # Is that good? No.
@@ -312,8 +309,6 @@ class CustomRewardEnv(RedGymEnv):
         # self.explore_map[self.explore_map > 0] = np.clip(
         #     self.explore_map[self.explore_map > 0], 0.15, 1
         # )
-
-
 
     ##########################################################################
     # Scripting helpers below
