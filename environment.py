@@ -79,8 +79,7 @@ class CustomRewardEnv(RedGymEnv):
     def reset(self, seed: Optional[int] = None):
         self._reset_reward_vars()
         # After each reset, increase max steps
-        if not self.first:
-            self.max_steps += self.init_max_steps
+        self.max_steps += self.init_max_steps
         return super().reset(seed)
 
     def _reset_reward_vars(self):
