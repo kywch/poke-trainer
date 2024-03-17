@@ -105,6 +105,7 @@ class CustomRewardEnv(RedGymEnv):
         self.moves_learned_with_item = 0
         self.just_learned_item_move = 0
 
+        self.event_obs.fill(0)
         self._update_event_obs(reset=True)
         self.base_event_flags = self.event_obs.sum()
 
@@ -163,6 +164,9 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["rewarded_action_bag_menu"] = self.rewarded_action_bag_menu
             info["stats"]["pokemon_action_count"] = self.pokemon_action_count
             info["stats"]["rewared_pokemon_action"] = self.rewared_pokemon_action
+
+            # Does the events get correctly reset?
+            info["stats"]["base_event_flags"] = self.base_event_flags  # should be constant throughout
 
         return obs, rew, reset, False, info
 
