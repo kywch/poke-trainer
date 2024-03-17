@@ -21,6 +21,7 @@ class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
         self.event_obs = np.zeros(320, dtype=np.uint8)
+        self.init_max_steps = env_config.max_steps
 
         # NOTE: these are not yet used
         # self.explore_weight = reward_config["explore_weight"]
@@ -77,6 +78,8 @@ class CustomRewardEnv(RedGymEnv):
 
     def reset(self, seed: Optional[int] = None):
         self._reset_reward_vars()
+        # After each reset, increase max steps
+        self.max_steps += self.init_max_steps
         return super().reset(seed)
 
     def _reset_reward_vars(self):
