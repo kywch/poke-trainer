@@ -11,7 +11,7 @@ from pokemonred_puffer.environment import (
     PARTY_LEVEL_ADDRS,
 )
 
-#MUSEUM_TICKET = (0xD754, 0)
+MUSEUM_TICKET = (0xD754, 0)
 BASE_EVENT_REWARD = 11  # Bulbasaur state starts with 11 event scores
 
 MENU_COOLDOWN = 200
@@ -95,6 +95,7 @@ class CustomRewardEnv(RedGymEnv):
         self.event_reward.fill(0)
         self.max_event_rew = 0
         self._update_event_obs()
+        self.consumed_item_count = 0
 
         self.max_level_sum = 0
 
@@ -138,8 +139,10 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["rewarded_action_bag_menu"] = self.rewarded_action_bag_menu
             info["stats"]["pokemon_action_count"] = self.pokemon_action_count
             info["stats"]["rewared_pokemon_action"] = self.rewared_pokemon_action
+            info["stats"]["consumed_item_count"] = self.consumed_item_count
 
             # Does the events get correctly reset?
+            # NOTE: event is not resetting to 0. REVISIT THIS
             info["stats"]["new_event_reward"] = self.event_reward.sum()
 
         return obs, rew, reset, False, info
@@ -167,7 +170,7 @@ class CustomRewardEnv(RedGymEnv):
                 return 0.1
 
             # encourage going to action bag menu with very small reward
-            if self.seen_action_bag_menu is True and self.menu_reward_cooldown == 0:
+            if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
                 self.menu_reward_cooldown = 30
                 return 0.001
 
@@ -193,7 +196,7 @@ class CustomRewardEnv(RedGymEnv):
             "badge": self.badges * 5.0,
             "map_progress": self.max_map_progress * 2.0,
             #"opponent_level": self.max_opponent_level * 1.0,
-            "key_events": self.key_events_reward * 0.5,  # bill_said, got_hm01, taught_cut
+            "key_events": self.key_events_reward * 2.0,  # bill_said, got_hm01, taught_cut
 
             # Party strength proxy
             "party_size": self.party_size * 3.0,
@@ -211,7 +214,7 @@ class CustomRewardEnv(RedGymEnv):
             "explore": sum(self.seen_coords.values()) * 0.01,
 
             # First, always search for new pokemon and events
-            "seen_pokemon": sum(self.seen_pokemon) * 1.5,  # more related to story progression?
+            "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
 
             # NOTE: there seems to be a lot of irrevant events?
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
@@ -220,7 +223,7 @@ class CustomRewardEnv(RedGymEnv):
             "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
+            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
@@ -247,15 +250,14 @@ class CustomRewardEnv(RedGymEnv):
                     else:
                         self.event_count[addr] += 1
 
-                # CHECK ME: should we exclude museum ticket?
                 discount_factor = (5 - self.event_count[addr]) * 0.25 if self.event_count[addr] < 5 else 0.2
                 self.event_reward[i] = self.bit_count(val) * discount_factor
 
     def _update_event_reward_vars(self):
         self._update_event_obs()
 
-        cur_rew = max(self.event_reward.sum() - BASE_EVENT_REWARD, 0)
-        self.max_event_rew = max(cur_rew, self.max_event_rew)  # do we need this?
+        cur_rew = max(self.event_reward.sum() - BASE_EVENT_REWARD - int(self.read_bit(*MUSEUM_TICKET)), 0)
+        self.max_event_rew = max(cur_rew, self.max_event_rew)
 
         # Check KEY events
         self.badges = self.get_badges()
@@ -265,8 +267,9 @@ class CustomRewardEnv(RedGymEnv):
         # Check learn moves with item -- could be spammed later, but it's fine for now
         new_moves = self.moves_obtained.sum()
         self.just_learned_item_move = 0
-        if new_moves > self.curr_moves:  # move learned
-            if self.read_m(0xD31D) < self.curr_item_num:  # item consumed
+        if self.read_m(0xD31D) < self.curr_item_num:  # item consumed/tossed?
+            self.consumed_item_count += 1
+            if new_moves > self.curr_moves:  # move learned
                 self.moves_learned_with_item += 1
                 self.just_learned_item_move = 1
         self.curr_moves = new_moves
