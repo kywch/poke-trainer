@@ -264,7 +264,8 @@ class CustomRewardEnv(RedGymEnv):
                     else:
                         self.event_count[addr] += 1
 
-                discount_factor = (5 - self.event_count[addr]) * 0.25 if self.event_count[addr] < 5 else 0.2
+                # NOTE: progress is very sensitive to this
+                discount_factor = 1.1 - self.event_count[addr] * 0.1 if self.event_count[addr] < 11 else 0.1
                 self.event_reward[i] = self.bit_count(val) * discount_factor
 
         # NOTE: base_event_reward is different after reset. What's going on?
