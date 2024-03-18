@@ -265,7 +265,13 @@ class CustomRewardEnv(RedGymEnv):
                         self.event_count[addr] += 1
 
                 # NOTE: progress is very sensitive to this
-                discount_factor = 1.1 - self.event_count[addr] * 0.1 if self.event_count[addr] < 11 else 0.1
+                # Explore (the first run) vs. Exploit (learned path) trade-off is happening
+                # Exploit: After the first run, agents know "where" to collect reward.
+                #          Larger reward should come from major milestones and making progress (collect new tile scores)
+                #          Having large event reward slow the agents down because it will hit every event
+                #           - No discount makes story progression slower after each reset
+                #           - 0-ing all known events make story progression very fast after reset, but forget events
+                discount_factor = 1.0 / self.event_count[addr]
                 self.event_reward[i] = self.bit_count(val) * discount_factor
 
         # NOTE: base_event_reward is different after reset. What's going on?
