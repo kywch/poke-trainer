@@ -182,10 +182,13 @@ class CustomRewardEnv(RedGymEnv):
         # if has hm01 cut, then do not give normal reward until cut is learned
         if self.use_limited_reward:
             if self.just_learned_item_move > 0:  # encourage any learning from item
+                self.moves_learned_with_item += 1
                 return 0.1
             # encourage going to action bag menu with very small reward
             if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
                 self.menu_reward_cooldown = 30
+                self.action_bag_menu_count += 1
+                self.rewarded_action_bag_menu += 1
                 return 0.001
             # None of the above -- no reward
             return 0
