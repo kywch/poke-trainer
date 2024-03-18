@@ -12,7 +12,6 @@ from pokemonred_puffer.environment import (
 )
 
 MUSEUM_TICKET = (0xD754, 0)
-BASE_EVENT_REWARD = 11  # Bulbasaur state starts with 11 event scores
 
 MENU_COOLDOWN = 200
 PRESS_BUTTON_A = 5
@@ -26,8 +25,11 @@ class CustomRewardEnv(RedGymEnv):
         #self.event_obs = np.zeros(320, dtype=np.uint8)
         self.event_count = {}  # kept for whole training run, take this when checkpointing
         self.experienced_events = set()  # reset every episode
-        self.event_reward = np.zeros(320, dtype=np.uint8)
-        
+        self.event_reward = np.zeros(320)
+        self.base_event_reward = 0
+
+        self._reset_reward_vars()
+
         # NOTE: these are not yet used
         # self.explore_weight = reward_config["explore_weight"]
         # self.explore_npc_weight = reward_config["explore_npc_weight"]
@@ -82,10 +84,23 @@ class CustomRewardEnv(RedGymEnv):
         }
 
     def reset(self, seed: Optional[int] = None):
-        self._reset_reward_vars()
         # After each reset, increase max steps
         self.max_steps += self.init_max_steps
-        return super().reset(seed)
+
+        # Load the state and reset all the RedGymEnv vars
+        obs, info = super().reset(seed)
+
+        # NOTE: these dict are used for exploration decay within episode
+        # So they should be reset every episode
+        if self.first is False:
+            self.seen_coords.clear()
+            self.seen_npcs.clear()
+            self.seen_hidden_objs.clear()
+
+        self.total_reward = 0  # NOTE: super.reset() updates this before resetting reward vars
+        self._reset_reward_vars()
+
+        return obs, info
 
     def _reset_reward_vars(self):
         self.use_limited_reward = False
@@ -93,6 +108,7 @@ class CustomRewardEnv(RedGymEnv):
         #self.event_obs.fill(0)
         self.experienced_events.clear()
         self.event_reward.fill(0)
+        self.base_event_reward = 0
         self.max_event_rew = 0
         self._update_event_obs()
         self.consumed_item_count = 0
@@ -163,18 +179,16 @@ class CustomRewardEnv(RedGymEnv):
 
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
-
         # if has hm01 cut, then do not give normal reward until cut is learned
         if self.use_limited_reward:
             if self.just_learned_item_move > 0:  # encourage any learning from item
                 return 0.1
-
             # encourage going to action bag menu with very small reward
             if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
                 self.menu_reward_cooldown = 30
                 return 0.001
-
-        #     return 0
+            # None of the above -- no reward
+            return 0
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()
@@ -224,7 +238,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
-            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
+            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
             # Make these better than nothing, but do not let these be larger than the above
@@ -253,10 +267,14 @@ class CustomRewardEnv(RedGymEnv):
                 discount_factor = (5 - self.event_count[addr]) * 0.25 if self.event_count[addr] < 5 else 0.2
                 self.event_reward[i] = self.bit_count(val) * discount_factor
 
+        # NOTE: base_event_reward is different after reset. What's going on?
+        if self.base_event_reward == 0:
+            self.base_event_reward = self.event_reward.sum()
+
     def _update_event_reward_vars(self):
         self._update_event_obs()
 
-        cur_rew = max(self.event_reward.sum() - BASE_EVENT_REWARD - int(self.read_bit(*MUSEUM_TICKET)), 0)
+        cur_rew = max(self.event_reward.sum() - self.base_event_reward - int(self.read_bit(*MUSEUM_TICKET)), 0)
         self.max_event_rew = max(cur_rew, self.max_event_rew)
 
         # Check KEY events
