@@ -12,9 +12,9 @@ from pokemonred_puffer.environment import (
 )
 
 #MUSEUM_TICKET = (0xD754, 0)
-BASE_EVENT_COUNT = 4  # Bulbasaur state starts with 4 non-zero event addresses
+BASE_EVENT_REWARD = 11  # Bulbasaur state starts with 11 event scores
 
-MENU_COOLDOWN = 300
+MENU_COOLDOWN = 200
 PRESS_BUTTON_A = 5
 
 
@@ -26,8 +26,8 @@ class CustomRewardEnv(RedGymEnv):
         #self.event_obs = np.zeros(320, dtype=np.uint8)
         self.event_count = {}  # kept for whole training run, take this when checkpointing
         self.experienced_events = set()  # reset every episode
-        self.event_reward = 0
-
+        self.event_reward = np.zeros(320, dtype=np.uint8)
+        
         # NOTE: these are not yet used
         # self.explore_weight = reward_config["explore_weight"]
         # self.explore_npc_weight = reward_config["explore_npc_weight"]
@@ -92,7 +92,7 @@ class CustomRewardEnv(RedGymEnv):
 
         #self.event_obs.fill(0)
         self.experienced_events.clear()
-        self.event_reward = 0
+        self.event_reward.fill(0)
         self.max_event_rew = 0
         self._update_event_obs()
 
@@ -120,7 +120,7 @@ class CustomRewardEnv(RedGymEnv):
         if self.menu_reward_cooldown > 0:
             self.menu_reward_cooldown -= 1
 
-        #self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
+        self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
         # if self.use_limited_reward:
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
@@ -132,7 +132,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # NOTE: info is not always provided
         if "stats" in info:
-            info["stats"]["under_limited_reward"] = self.use_limited_reward
+            info["stats"]["under_limited_reward"] = self.use_limited_reward  # rename to hm 01, menu time?
             info["stats"]["learn_with_item"] = self.moves_learned_with_item
             info["stats"]["action_bag_menu_count"] = self.action_bag_menu_count
             info["stats"]["rewarded_action_bag_menu"] = self.rewarded_action_bag_menu
@@ -140,7 +140,7 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["rewared_pokemon_action"] = self.rewared_pokemon_action
 
             # Does the events get correctly reset?
-            info["stats"]["new_event_reward"] = self.event_reward
+            info["stats"]["new_event_reward"] = self.event_reward.sum()
 
         return obs, rew, reset, False, info
 
@@ -161,15 +161,15 @@ class CustomRewardEnv(RedGymEnv):
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
 
-        # # if has hm01 cut, then do not give normal reward until cut is learned
-        # if self.use_limited_reward:
-        #     if self.just_learned_item_move > 0:  # encourage any learning from item
-        #         return 0.1
+        # if has hm01 cut, then do not give normal reward until cut is learned
+        if self.use_limited_reward:
+            if self.just_learned_item_move > 0:  # encourage any learning from item
+                return 0.1
 
-        #     # encourage going to action bag menu with very small reward
-        #     if self.seen_action_bag_menu is True and self.menu_reward_cooldown == 0:
-        #         self.menu_reward_cooldown = 30
-        #         return 0.0001
+            # encourage going to action bag menu with very small reward
+            if self.seen_action_bag_menu is True and self.menu_reward_cooldown == 0:
+                self.menu_reward_cooldown = 30
+                return 0.001
 
         #     return 0
 
@@ -216,7 +216,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: there seems to be a lot of irrevant events?
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
-            # after seeing this, implemented the experienced reward discounting
+            # after seeing this, implemented the experienced event reward discounting
             "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
@@ -225,8 +225,8 @@ class CustomRewardEnv(RedGymEnv):
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
             # Make these better than nothing, but do not let these be larger than the above
-            "bag_menu_action": self.rewarded_action_bag_menu * 0.00001,
-            "pokemon_menu_action": self.rewared_pokemon_action * 0.00001,
+            "bag_menu_action": self.rewarded_action_bag_menu * 0.0001,
+            "pokemon_menu_action": self.rewared_pokemon_action * 0.0001,
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
@@ -237,22 +237,24 @@ class CustomRewardEnv(RedGymEnv):
         for i, addr in enumerate(range(EVENT_FLAGS_START, EVENT_FLAGS_START + EVENTS_FLAGS_LENGTH)):
             # NOTE: event obs is NOT binary, so we may miss some information there
             # self.event_obs[i] = self.bit_count(self.read_m(addr))
-            if self.read_m(addr) > 0 and addr not in self.experienced_events:
-                self.experienced_events.add(addr)
+            val = self.read_m(addr)
+            if val > 0:
+                if addr not in self.experienced_events:
+                    self.experienced_events.add(addr)
+                    # Update event count, which is kept for the whole training run
+                    if addr not in self.event_count:
+                        self.event_count[addr] = 1  # unit: episode
+                    else:
+                        self.event_count[addr] += 1
 
-                # Update event count, which is kept for the whole training run
-                if addr not in self.event_count:
-                    self.event_count[addr] = 1
-                else:
-                    self.event_count[addr] += 1
-
-                # Give reward for each event (addr), but discount for experienced events
-                self.event_reward += 1 / self.event_count[addr]
+                # CHECK ME: should we exclude museum ticket?
+                discount_factor = (5 - self.event_count[addr]) * 0.25 if self.event_count[addr] < 5 else 0.2
+                self.event_reward[i] = self.bit_count(val) * discount_factor
 
     def _update_event_reward_vars(self):
         self._update_event_obs()
 
-        cur_rew = max(self.event_reward - BASE_EVENT_COUNT, 0)
+        cur_rew = max(self.event_reward.sum() - BASE_EVENT_REWARD, 0)
         self.max_event_rew = max(cur_rew, self.max_event_rew)  # do we need this?
 
         # Check KEY events
@@ -296,21 +298,21 @@ class CustomRewardEnv(RedGymEnv):
 
     ##########################################################################
 
-    # def got_hm01_cut_but_not_learned_yet(self):
-    #     # prev events that need to be true
-    #     prev_events = [
-    #         self.read_bit(0xD7F1, 0),  # met bill
-    #         self.read_bit(0xD7F2, 3),  # used cell separator on bill
-    #         self.read_bit(0xD7F2, 4),  # ss ticket
-    #         self.read_bit(0xD7F2, 5),  # met bill 2
-    #         self.read_bit(0xD7F2, 6),  # bill said use cell separator
-    #         self.read_bit(0xD7F2, 7),  # left bills house after helping
-    #     ]
+    def got_hm01_cut_but_not_learned_yet(self):
+        # prev events that need to be true
+        prev_events = [
+            self.read_bit(0xD7F1, 0),  # met bill
+            self.read_bit(0xD7F2, 3),  # used cell separator on bill
+            self.read_bit(0xD7F2, 4),  # ss ticket
+            self.read_bit(0xD7F2, 5),  # met bill 2
+            self.read_bit(0xD7F2, 6),  # bill said use cell separator
+            self.read_bit(0xD7F2, 7),  # left bills house after helping
+        ]
 
-    #     got_hm01 = self.read_bit(0xD803, 0)
-    #     rubbed_captain = self.read_bit(0xD803, 1)
+        got_hm01 = self.read_bit(0xD803, 0)
+        rubbed_captain = self.read_bit(0xD803, 1)
 
-    #     return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
+        return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
 
     # Yes. This wrapper mutates the env.
     # Is that good? No.
