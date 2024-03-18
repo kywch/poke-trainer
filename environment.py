@@ -35,10 +35,13 @@ class CustomRewardEnv(RedGymEnv):
         # self.explore_npc_weight = reward_config["explore_npc_weight"]
         # self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
 
-        # TODO: try to use step_forget_explore() later
-        #       dynamic is somewhat complicated
-        # self.step_forgetting_factor = reward_config.step_forgetting_factor
-        # self.forgetting_frequency = reward_config.forgetting_frequency
+        # NOTE: decaying seen coords/tiles makes reward dense, making the place more "sticky"
+        # Due to the sparse nature of rewards, dense but small rewards in one place 
+        #   can make agents stick to that place. decay_freq=10 made it sticky, 1000 made it "fluid"
+        # Decay target: ~ 0.6 after 10000 steps (e.g., with decaying every 10 steps: 0.9995 ** 1000)
+        #  - with decaying every 100 steps: 0.995 ** 100
+        self.decay_factor = 0.995
+        self.decay_frequency = 100
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -142,6 +145,10 @@ class CustomRewardEnv(RedGymEnv):
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
         #     pass
+
+        # Apply decay on the seen coords and npcs
+        if self.step_count % self.decay_frequency == 0:
+            self.step_decay_seen_coords()
 
         obs, rew, reset, _, info = super().step(action)
 
@@ -349,13 +356,13 @@ class CustomRewardEnv(RedGymEnv):
     # Is that good? No.
     # Am I doing it anyway? Yes.
     # Why? To save memory
-    def step_forget_explore(self):
+    def step_decay_seen_coords(self):
         self.seen_coords.update(
-            (k, max(0.15, v * (self.step_forgetting_factor["coords"])))
+            (k, max(0.15, v * self.decay_factor))
             for k, v in self.seen_coords.items()
         )
         self.seen_npcs.update(
-            (k, max(0.15, v * (self.step_forgetting_factor["npc"])))
+            (k, max(0.15, v * self.decay_factor))
             for k, v in self.seen_npcs.items()
         )
 

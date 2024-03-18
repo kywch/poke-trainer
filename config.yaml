@@ -86,18 +86,18 @@ wrappers:
   baseline:
     - stream_wrapper.StreamWrapper:
         user: kywch
-    - exploration.DecayWrapper:
-        step_forgetting_factor:
-          npc: 0.9
-          coords: 0.9
-          map_ids: 0.9
-          explore: 0.9
-          start_menu: 0.998
-          pokemon_menu: 0.998
-          stats_menu: 0.998
-          bag_menu: 0.998
-          action_bag_menu: 0.998
-        forgetting_frequency: 1000
+    # - exploration.DecayWrapper:
+    #     step_forgetting_factor:
+    #       npc: 0.9
+    #       coords: 0.9
+    #       map_ids: 0.9
+    #       explore: 0.9
+    #       start_menu: 0.998
+    #       pokemon_menu: 0.998
+    #       stats_menu: 0.998
+    #       bag_menu: 0.998
+    #       action_bag_menu: 0.998
+    #     forgetting_frequency: 1000
 
 rewards:
   environment.CustomRewardEnv:
