@@ -217,7 +217,7 @@ class CustomRewardEnv(RedGymEnv):
             "level": self.get_levels_reward(),
 
             # Important skill: learning moves with items
-            "learn_with_item": self.moves_learned_with_item * 0.5,
+            "learn_with_item": self.moves_learned_with_item * 3.0,
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
