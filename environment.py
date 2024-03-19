@@ -260,7 +260,7 @@ class CustomRewardEnv(RedGymEnv):
             "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
+            "explore_npcs": len(self.seen_npcs) * 0.005,  # talk to new npcs
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
