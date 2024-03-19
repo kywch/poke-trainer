@@ -257,7 +257,7 @@ class CustomRewardEnv(RedGymEnv):
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
             # after seeing this, implemented the experienced event reward discounting
             # NOTE: During exploration, try to maintain event rew to 1/4 of tile rew
-            "event": self.max_event_rew * 1.0,
+            "event": self.max_event_rew * 2.0,
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": len(self.seen_npcs) * 0.005,  # talk to new npcs
