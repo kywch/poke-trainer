@@ -16,6 +16,7 @@ MUSEUM_TICKET = (0xD754, 0)
 MENU_COOLDOWN = 200
 PRESS_BUTTON_A = 5
 
+BASE_TILE_NUM = 500  # tile exploration reward starts from this
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
@@ -171,6 +172,7 @@ class CustomRewardEnv(RedGymEnv):
             # Does the events get correctly reset?
             # NOTE: event is not resetting to 0. REVISIT THIS
             info["stats"]["new_event_reward"] = self.event_reward.sum()
+            info["stats"]["new_tile_reward"] = self.tile_reward
 
         return obs, rew, reset, False, info
 
@@ -207,7 +209,9 @@ class CustomRewardEnv(RedGymEnv):
         # compute reward
         self.progress_reward = self.get_game_state_reward()
         new_total = sum([val for _, val in self.progress_reward.items()])
-        new_step = new_total - self.total_reward
+
+        # Total reward is not 0 at the beginning, so make the initial reward 0
+        new_step = new_total - self.total_reward if self.total_reward > 0 else 0
 
         self.total_reward = new_total
         return new_step
@@ -219,6 +223,9 @@ class CustomRewardEnv(RedGymEnv):
 
         self._update_event_reward_vars()
         self._update_tile_reward_vars()
+
+        # NOTE: subtract BASE_TILE_NUM to ignore the initial maps
+        adj_tile_reward = max(self.tile_reward - BASE_TILE_NUM, 0) ** 0.9
 
         return {
             # Main milestones for story progression
@@ -240,7 +247,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore_tile": self.tile_reward * 0.01,
+            "explore_tile": adj_tile_reward * 0.01,
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
