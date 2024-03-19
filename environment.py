@@ -224,9 +224,6 @@ class CustomRewardEnv(RedGymEnv):
         self._update_event_reward_vars()
         self._update_tile_reward_vars()
 
-        # NOTE: subtract BASE_TILE_NUM to ignore the initial maps
-        adj_tile_reward = max(self.tile_reward - BASE_TILE_NUM, 0) ** 0.9
-
         return {
             # Main milestones for story progression
             "badge": self.badges * 5.0,
@@ -247,7 +244,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore_tile": adj_tile_reward * 0.01,
+            "explore_tile": self.tile_reward * 0.01,  # KEEP THIS CONSTANT
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
@@ -256,7 +253,8 @@ class CustomRewardEnv(RedGymEnv):
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
             # after seeing this, implemented the experienced event reward discounting
-            "event": self.max_event_rew * 1.0,
+            # NOTE: During exploration, try to maintain event rew to 1/4 of tile rew
+            "event": self.max_event_rew * 1.5,
 
             # If the above doesn't work, try these in the order of importance
             "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
@@ -293,8 +291,10 @@ class CustomRewardEnv(RedGymEnv):
                 #          Having large event reward slow the agents down because it will hit every event
                 #           - No discount makes story progression slower after each reset
                 #           - 0-ing all known events make story progression very fast after reset, but forget events
-                discount_factor = 1.0 / self.event_count[addr]
-                self.event_reward[i] = self.bit_count(val) * discount_factor
+
+                # Disable event discount for now
+                #discount_factor = 1.0 / self.event_count[addr]
+                self.event_reward[i] = self.bit_count(val) # * discount_factor
 
         # NOTE: base_event_reward is different after reset. What's going on?
         if self.base_event_reward == 0:
