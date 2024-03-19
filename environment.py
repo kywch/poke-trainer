@@ -16,7 +16,7 @@ MUSEUM_TICKET = (0xD754, 0)
 MENU_COOLDOWN = 200
 PRESS_BUTTON_A = 5
 
-BASE_TILE_NUM = 500  # tile exploration reward starts from this
+BASE_TILE_NUM = 100  # tile exploration reward starts from this
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
