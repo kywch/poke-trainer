@@ -39,7 +39,8 @@ class CustomRewardEnv(RedGymEnv):
         # not well understood the dynamics yet. Buy decaying the value when there are so many coords
         # decrease the summed value much and thus push the agents to visit new coord more, just to fill it
         # Thus using MaxLengthWrapper to cap the seen coords at 3000
-        self.decay_factor = 0.9995
+        self.decay_factor_coords = 0.9995
+        self.decay_factor_npcs = 0.995
         self.decay_frequency = 10
 
         # NOTE: observation space must match the policy input
@@ -234,7 +235,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore": sum(self.seen_coords.values()) * 0.01,
+            "explore": sum(self.seen_coords.values()) * 0.008,
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
@@ -357,11 +358,11 @@ class CustomRewardEnv(RedGymEnv):
     # Why? To save memory
     def step_decay_seen_coords(self):
         self.seen_coords.update(
-            (k, max(0.15, v * self.decay_factor))
+            (k, max(0.15, v * self.decay_factor_coords))
             for k, v in self.seen_coords.items()
         )
         self.seen_npcs.update(
-            (k, max(0.15, v * self.decay_factor))
+            (k, max(0.15, v * self.decay_factor_npcs))
             for k, v in self.seen_npcs.items()
         )
 
