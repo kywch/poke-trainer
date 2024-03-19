@@ -40,11 +40,13 @@ class CustomRewardEnv(RedGymEnv):
         # not well understood the dynamics yet. Buy decaying the value when there are so many coords
         # decrease the summed value much and thus push the agents to visit new coord more, just to fill it
         # Thus using MaxLengthWrapper to cap the seen coords at 3000
-        self.tile_reward = 0
-        self.seen_tiles = {}
-        self.decay_factor_coords = 0.9995
-        self.decay_factor_npcs = 0.995
-        self.decay_frequency = 10
+
+        # NOTE: Try no decay
+        # self.tile_reward = 0
+        # self.seen_tiles = {}
+        # self.decay_factor_coords = 0.9995
+        # self.decay_factor_npcs = 0.995
+        # self.decay_frequency = 10
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -99,7 +101,7 @@ class CustomRewardEnv(RedGymEnv):
         # NOTE: these dict are used for exploration decay within episode
         # So they should be reset every episode
         if self.first is False:
-            self.seen_tiles.clear()
+            #self.seen_tiles.clear()
             self.seen_coords.clear()
             self.seen_npcs.clear()
             self.seen_hidden_objs.clear()
@@ -120,7 +122,7 @@ class CustomRewardEnv(RedGymEnv):
         self._update_event_obs()
         self.consumed_item_count = 0
 
-        self.tile_reward = 0
+        #self.tile_reward = 0
         self.max_level_sum = 0
 
         # KEY events
@@ -152,8 +154,8 @@ class CustomRewardEnv(RedGymEnv):
         #     pass
 
         # Apply decay on the seen coords and npcs
-        if self.step_count % self.decay_frequency == 0:
-            self.step_decay_seen_coords()
+        # if self.step_count % self.decay_frequency == 0:
+        #     self.step_decay_seen_coords()
 
         obs, rew, reset, _, info = super().step(action)
 
@@ -172,7 +174,7 @@ class CustomRewardEnv(RedGymEnv):
             # Does the events get correctly reset?
             # NOTE: event is not resetting to 0. REVISIT THIS
             info["stats"]["new_event_reward"] = self.event_reward.sum()
-            info["stats"]["new_tile_reward"] = self.tile_reward
+            info["stats"]["new_tile_reward"] = len(self.seen_coords)
 
         return obs, rew, reset, False, info
 
@@ -222,7 +224,7 @@ class CustomRewardEnv(RedGymEnv):
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
 
         self._update_event_reward_vars()
-        self._update_tile_reward_vars()
+        #self._update_tile_reward_vars()
 
         return {
             # Main milestones for story progression
@@ -236,7 +238,7 @@ class CustomRewardEnv(RedGymEnv):
             "level": self.get_levels_reward(),
 
             # Important skill: learning moves with items
-            "learn_with_item": self.moves_learned_with_item * 3.0,
+            "learn_with_item": self.moves_learned_with_item * 2.0,
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
@@ -244,7 +246,8 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore_tile": self.tile_reward * 0.01,  # KEEP THIS CONSTANT
+            #"explore_tile": self.tile_reward * 0.01,  # KEEP THIS CONSTANT
+            "explore_tile": len(self.seen_coords) * 0.01,  # KEEP THIS CONSTANT
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
@@ -254,11 +257,11 @@ class CustomRewardEnv(RedGymEnv):
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
             # after seeing this, implemented the experienced event reward discounting
             # NOTE: During exploration, try to maintain event rew to 1/4 of tile rew
-            "event": self.max_event_rew * 1.5,
+            "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
-            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
+            "explore_npcs": len(self.seen_npcs) * 0.03,  # talk to new npcs
+            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
             # Make these better than nothing, but do not let these be larger than the above
@@ -341,7 +344,7 @@ class CustomRewardEnv(RedGymEnv):
             self.seen_tiles[key] = 1
         self.tile_reward += rew
 
-    def get_levels_reward(self, level_cap=15):
+    def get_levels_reward(self, level_cap=30):
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
         ]
@@ -373,22 +376,22 @@ class CustomRewardEnv(RedGymEnv):
 
         return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
 
-    def step_decay_seen_coords(self):
-        self.seen_tiles.update(
-            (k, max(0.15, v * self.decay_factor_coords))
-            for k, v in self.seen_tiles.items()
-        )
-        self.seen_npcs.update(
-            (k, max(0.15, v * self.decay_factor_npcs))
-            for k, v in self.seen_npcs.items()
-        )
+    # def step_decay_seen_coords(self):
+    #     self.seen_tiles.update(
+    #         (k, max(0.15, v * self.decay_factor_coords))
+    #         for k, v in self.seen_tiles.items()
+    #     )
+    #     self.seen_npcs.update(
+    #         (k, max(0.15, v * self.decay_factor_npcs))
+    #         for k, v in self.seen_npcs.items()
+    #     )
 
-        # NOTE: potentially useful?
-        # self.seen_map_ids *= self.step_forgetting_factor["map_ids"]
-        # self.explore_map *= self.step_forgetting_factor["explore"]
-        # self.explore_map[self.explore_map > 0] = np.clip(
-        #     self.explore_map[self.explore_map > 0], 0.15, 1
-        # )
+    #     # NOTE: potentially useful?
+    #     # self.seen_map_ids *= self.step_forgetting_factor["map_ids"]
+    #     # self.explore_map *= self.step_forgetting_factor["explore"]
+    #     # self.explore_map[self.explore_map > 0] = np.clip(
+    #     #     self.explore_map[self.explore_map > 0], 0.15, 1
+    #     # )
 
     ##########################################################################
     # Scripting helpers below
