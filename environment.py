@@ -39,6 +39,8 @@ class CustomRewardEnv(RedGymEnv):
         # not well understood the dynamics yet. Buy decaying the value when there are so many coords
         # decrease the summed value much and thus push the agents to visit new coord more, just to fill it
         # Thus using MaxLengthWrapper to cap the seen coords at 3000
+        self.tile_reward = 0
+        self.seen_tiles = {}
         self.decay_factor_coords = 0.9995
         self.decay_factor_npcs = 0.995
         self.decay_frequency = 10
@@ -96,6 +98,7 @@ class CustomRewardEnv(RedGymEnv):
         # NOTE: these dict are used for exploration decay within episode
         # So they should be reset every episode
         if self.first is False:
+            self.seen_tiles.clear()
             self.seen_coords.clear()
             self.seen_npcs.clear()
             self.seen_hidden_objs.clear()
@@ -116,6 +119,7 @@ class CustomRewardEnv(RedGymEnv):
         self._update_event_obs()
         self.consumed_item_count = 0
 
+        self.tile_reward = 0
         self.max_level_sum = 0
 
         # KEY events
@@ -214,6 +218,7 @@ class CustomRewardEnv(RedGymEnv):
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
 
         self._update_event_reward_vars()
+        self._update_tile_reward_vars()
 
         return {
             # Main milestones for story progression
@@ -235,7 +240,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore": sum(self.seen_coords.values()) * 0.008,
+            "explore": self.tile_reward * 0.01,
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
@@ -320,6 +325,15 @@ class CustomRewardEnv(RedGymEnv):
             ]
         )
 
+    def _update_tile_reward_vars(self):
+        key = self.get_game_coords()
+        if key not in self.seen_tiles:
+            rew = self.seen_tiles[key] = 1
+        else:
+            rew = 1 - self.seen_tiles[key]  # discounted
+            self.seen_tiles[key] = 1
+        self.tile_reward += rew
+
     def get_levels_reward(self, level_cap=15):
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
@@ -352,14 +366,10 @@ class CustomRewardEnv(RedGymEnv):
 
         return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
 
-    # Yes. This wrapper mutates the env.
-    # Is that good? No.
-    # Am I doing it anyway? Yes.
-    # Why? To save memory
     def step_decay_seen_coords(self):
-        self.seen_coords.update(
+        self.seen_tiles.update(
             (k, max(0.15, v * self.decay_factor_coords))
-            for k, v in self.seen_coords.items()
+            for k, v in self.seen_tiles.items()
         )
         self.seen_npcs.update(
             (k, max(0.15, v * self.decay_factor_npcs))
