@@ -36,12 +36,11 @@ class CustomRewardEnv(RedGymEnv):
         # self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
 
         # NOTE: decaying seen coords/tiles makes reward dense, making the place more "sticky"
-        # Due to the sparse nature of rewards, dense but small rewards in one place 
-        #   can make agents stick to that place. decay_freq=10 made it sticky, 1000 made it "fluid"
-        # Decay target: ~ 0.6 after 10000 steps (e.g., with decaying every 10 steps: 0.9995 ** 1000)
-        #  - with decaying every 100 steps: 0.995 ** 100
-        self.decay_factor = 0.995
-        self.decay_frequency = 100
+        # not well understood the dynamics yet. Buy decaying the value when there are so many coords
+        # decrease the summed value much and thus push the agents to visit new coord more, just to fill it
+        # Thus using MaxLengthWrapper to cap the seen coords at 3000
+        self.decay_factor = 0.9995
+        self.decay_frequency = 10
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -235,7 +234,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore": sum(self.seen_coords.values()) * 0.008,
+            "explore": sum(self.seen_coords.values()) * 0.01,
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?

@@ -86,6 +86,8 @@ wrappers:
   baseline:
     - stream_wrapper.StreamWrapper:
         user: kywch
+    - exploration.MaxLengthWrapper:
+        capacity: 3000
     # - exploration.DecayWrapper:
     #     step_forgetting_factor:
     #       npc: 0.9
