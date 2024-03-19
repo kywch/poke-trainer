@@ -240,7 +240,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore": self.tile_reward * 0.01,
+            "explore_tile": self.tile_reward * 0.01,
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
