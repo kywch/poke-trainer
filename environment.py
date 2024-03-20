@@ -226,12 +226,12 @@ class CustomRewardEnv(RedGymEnv):
         return {
             # Main milestones for story progression
             "badge": self.badges * 10.0,
-            "map_progress": self.max_map_progress * 3.0,
-            #"opponent_level": self.max_opponent_level * 1.0,
+            "map_progress": self.max_map_progress * 2.0,
+            "opponent_level": self.max_opponent_level * 2.0,
             "key_events": self.key_events_reward * 5.0,  # bill_saved, got_hm01, taught_cut
 
             # Party strength proxy
-            "party_size": self.party_size * 3.0,
+            "party_size": self.party_size * 2.0,
             "level": self.get_levels_reward(),
 
             # Important skill: learning moves with items
