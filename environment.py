@@ -171,6 +171,7 @@ class CustomRewardEnv(RedGymEnv):
             # Does the events get correctly reset?
             # NOTE: event is not resetting to 0. REVISIT THIS
             info["stats"]["new_event_reward"] = self.event_reward.sum()
+            info["stats"]["new_tile_reward"] = self.tile_reward
 
         return obs, rew, reset, False, info
 
@@ -191,18 +192,18 @@ class CustomRewardEnv(RedGymEnv):
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
         # if has hm01 cut, then do not give normal reward until cut is learned
-        if self.use_limited_reward:
-            if self.just_learned_item_move > 0:  # encourage any learning from item
-                self.moves_learned_with_item += 1
-                return 0.1
-            # encourage going to action bag menu with very small reward
-            if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
-                self.menu_reward_cooldown = 30
-                self.action_bag_menu_count += 1
-                self.rewarded_action_bag_menu += 1
-                return 0.001
-            # None of the above -- no reward
-            return 0
+        # if self.use_limited_reward:
+        #     if self.just_learned_item_move > 0:  # encourage any learning from item
+        #         self.moves_learned_with_item += 1
+        #         return 0.1
+        #     # encourage going to action bag menu with very small reward
+        #     if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
+        #         self.menu_reward_cooldown = 30
+        #         self.action_bag_menu_count += 1
+        #         self.rewarded_action_bag_menu += 1
+        #         return 0.001
+        #     # None of the above -- no reward
+        #     return 0
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()
@@ -218,7 +219,7 @@ class CustomRewardEnv(RedGymEnv):
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
 
         self._update_event_reward_vars()
-        self._update_tile_reward_vars()
+        self._update_tile_reward_vars(halt_revisit_reward=self.use_limited_reward)
 
         return {
             # Main milestones for story progression
@@ -286,7 +287,8 @@ class CustomRewardEnv(RedGymEnv):
                 #          Having large event reward slow the agents down because it will hit every event
                 #           - No discount makes story progression slower after each reset
                 #           - 0-ing all known events make story progression very fast after reset, but forget events
-                discount_factor = 1.0 / self.event_count[addr]
+
+                discount_factor = (11 - self.event_count[addr]) * 0.1 if self.event_count[addr] < 5 else 0.7
                 self.event_reward[i] = self.bit_count(val) * discount_factor
 
         # NOTE: base_event_reward is different after reset. What's going on?
@@ -325,13 +327,14 @@ class CustomRewardEnv(RedGymEnv):
             ]
         )
 
-    def _update_tile_reward_vars(self):
+    def _update_tile_reward_vars(self, halt_revisit_reward=False):
         key = self.get_game_coords()
         if key not in self.seen_tiles:
             rew = self.seen_tiles[key] = 1
         else:
-            rew = 1 - self.seen_tiles[key]  # discounted
+            rew = 1 - self.seen_tiles[key] if halt_revisit_reward is False else 0
             self.seen_tiles[key] = 1
+
         self.tile_reward += rew
 
     def get_levels_reward(self, level_cap=15):
@@ -361,10 +364,12 @@ class CustomRewardEnv(RedGymEnv):
             self.read_bit(0xD7F2, 7),  # left bills house after helping
         ]
 
-        got_hm01 = self.read_bit(0xD803, 0)
-        rubbed_captain = self.read_bit(0xD803, 1)
+        # got_hm01 = self.read_bit(0xD803, 0)
+        # rubbed_captain = self.read_bit(0xD803, 1)
 
-        return all(prev_events) and got_hm01 and rubbed_captain and not self.taught_cut
+        # getting the ss ticket, but not meeting the ticket.
+
+        return all(prev_events) # and got_hm01 and rubbed_captain and not self.taught_cut
 
     def step_decay_seen_coords(self):
         self.seen_tiles.update(
