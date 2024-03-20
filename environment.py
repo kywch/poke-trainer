@@ -230,8 +230,8 @@ class CustomRewardEnv(RedGymEnv):
             # Main milestones for story progression
             "badge": self.badges * 10.0,
             "map_progress": self.max_map_progress * 2.0,
-            #"opponent_level": self.max_opponent_level * 1.0,
-            "key_events": self.key_events_reward * 5.0,  # bill_said, got_hm01, taught_cut
+            "opponent_level": self.max_opponent_level * 2.0,
+            "key_events": self.key_events_reward * 5.0,  # bill_saved, got_hm01, taught_cut
 
             # Party strength proxy
             #"party_size": self.party_size * 3.0,
@@ -240,7 +240,7 @@ class CustomRewardEnv(RedGymEnv):
             # Important skill: learning moves with items
             "caught_pokemon": self.caught_pokemon.sum() * 4.0,
             "learn_with_item": self.moves_learned_with_item * 4.0,
-
+            "moves_obtained": self.curr_moves * 1.0,  # try to learn new moves, via menuing?
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
@@ -249,10 +249,10 @@ class CustomRewardEnv(RedGymEnv):
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
             #"explore_tile": self.tile_reward * 0.01,  
-            "explore_tile": len(self.seen_coords) * 0.02, # KEEP THIS CONSTANT
+            "explore_tile": len(self.seen_coords) * 0.03, # KEEP THIS CONSTANT
 
             # First, always search for new pokemon and events
-            "seen_pokemon": self.seen_pokemon.sum() * 4.0,  # more related to story progression?
+            "seen_pokemon": self.seen_pokemon.sum() * 2.0,  # more related to story progression?
 
             # NOTE: there seems to be a lot of irrevant events?
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
@@ -264,7 +264,6 @@ class CustomRewardEnv(RedGymEnv):
             # If the above doesn't work, try these in the order of importance
             #"explore_npcs": len(self.seen_npcs) * 0.005,  # talk to new npcs
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
-            "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
             # Make these better than nothing, but do not let these be larger than the above
             "bag_menu_action": self.rewarded_action_bag_menu * 0.0001,
