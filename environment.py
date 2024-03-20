@@ -125,8 +125,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # KEY events
         self.badges = 0
-        self.used_cell_separator = False
-        self.got_hm01 = False
+        self.key_events_to_cut = []
 
         # Track action bag menu
         self.action_bag_menu_count = 0
@@ -229,7 +228,7 @@ class CustomRewardEnv(RedGymEnv):
             "badge": self.badges * 10.0,
             "map_progress": self.max_map_progress * 2.0,
             "opponent_level": self.max_opponent_level * 2.0,
-            "key_events": self.key_events_reward * 5.0,  # bill_saved, got_hm01, taught_cut
+            "key_events": self.key_events_reward * 4.0,
 
             # Party strength proxy
             "party_size": self.party_size * 2.0,
@@ -307,8 +306,16 @@ class CustomRewardEnv(RedGymEnv):
 
         # Check KEY events
         self.badges = self.get_badges()
-        self.used_cell_separator = self.read_bit(0xD7F2, 3)
-        self.got_hm01 = self.read_bit(0xD803, 0)
+        self.key_events_to_cut = [
+            self.read_bit(0xD7F1, 0),  # met bill
+            self.read_bit(0xD7F2, 3),  # used cell separator on bill
+            self.read_bit(0xD7F2, 4),  # ss ticket
+            self.read_bit(0xD7F2, 5),  # met bill 2
+            self.read_bit(0xD7F2, 6),  # bill said use cell separator
+            self.read_bit(0xD7F2, 7),  # left bills house after helping
+            self.read_bit(0xD803, 1),  # rubbed_captain
+            self.read_bit(0xD803, 0),  # got hm 01
+        ]
 
         # Check learn moves with item -- could be spammed later, but it's fine for now
         new_moves = self.moves_obtained.sum()
@@ -323,13 +330,7 @@ class CustomRewardEnv(RedGymEnv):
 
     @property
     def key_events_reward(self):
-        return sum(
-            [
-                self.used_cell_separator,
-                self.got_hm01,
-                self.taught_cut,
-            ]
-        )
+        return sum(self.key_events_to_cut) + self.taught_cut
 
     def _update_tile_reward_vars(self, halt_revisit_reward=False):
         key = self.get_game_coords()
@@ -358,22 +359,7 @@ class CustomRewardEnv(RedGymEnv):
     ##########################################################################
 
     def got_hm01_cut_but_not_learned_yet(self):
-        # prev events that need to be true
-        prev_events = [
-            self.read_bit(0xD7F1, 0),  # met bill
-            self.read_bit(0xD7F2, 3),  # used cell separator on bill
-            self.read_bit(0xD7F2, 4),  # ss ticket
-            self.read_bit(0xD7F2, 5),  # met bill 2
-            self.read_bit(0xD7F2, 6),  # bill said use cell separator
-            self.read_bit(0xD7F2, 7),  # left bills house after helping
-        ]
-
-        # got_hm01 = self.read_bit(0xD803, 0)
-        # rubbed_captain = self.read_bit(0xD803, 1)
-
-        # getting the ss ticket, but not meeting the ticket.
-
-        return not self.taught_cut and all(prev_events) # and got_hm01 and rubbed_captain
+        return not self.taught_cut and all(self.key_events_to_cut)
 
     def step_decay_seen_coords(self):
         self.seen_tiles.update(
