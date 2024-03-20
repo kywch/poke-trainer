@@ -127,7 +127,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # KEY events
         self.badges = 0
-        self.bill_said_use_cell_separator = False
+        self.used_cell_separator_bill = False
         self.got_hm01 = False
 
         # Track action bag menu
@@ -228,17 +228,19 @@ class CustomRewardEnv(RedGymEnv):
 
         return {
             # Main milestones for story progression
-            "badge": self.badges * 5.0,
+            "badge": self.badges * 10.0,
             "map_progress": self.max_map_progress * 2.0,
             #"opponent_level": self.max_opponent_level * 1.0,
-            "key_events": self.key_events_reward * 2.0,  # bill_said, got_hm01, taught_cut
+            "key_events": self.key_events_reward * 5.0,  # bill_said, got_hm01, taught_cut
 
             # Party strength proxy
-            "party_size": self.party_size * 3.0,
+            #"party_size": self.party_size * 3.0,
             "level": self.get_levels_reward(),
 
             # Important skill: learning moves with items
-            "learn_with_item": self.moves_learned_with_item * 2.0,
+            "caught_pokemon": self.caught_pokemon.sum() * 4.0,
+            "learn_with_item": self.moves_learned_with_item * 4.0,
+
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
@@ -246,21 +248,21 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            #"explore_tile": self.tile_reward * 0.01,  # KEEP THIS CONSTANT
-            "explore_tile": len(self.seen_coords) * 0.02,
+            #"explore_tile": self.tile_reward * 0.01,  
+            "explore_tile": len(self.seen_coords) * 0.02, # KEEP THIS CONSTANT
 
             # First, always search for new pokemon and events
-            "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
+            "seen_pokemon": self.seen_pokemon.sum() * 4.0,  # more related to story progression?
 
             # NOTE: there seems to be a lot of irrevant events?
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
             # after seeing this, implemented the experienced event reward discounting
             # NOTE: During exploration, try to maintain event rew to 1/4 of tile rew
-            "event": self.max_event_rew * 2.0,
+            "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_npcs": len(self.seen_npcs) * 0.005,  # talk to new npcs
+            #"explore_npcs": len(self.seen_npcs) * 0.005,  # talk to new npcs
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
@@ -311,7 +313,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # Check KEY events
         self.badges = self.get_badges()
-        self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
+        self.used_cell_separator_bill = self.read_bit(0xD7F2, 3)
         self.got_hm01 = self.read_bit(0xD803, 0)
 
         # Check learn moves with item -- could be spammed later, but it's fine for now
@@ -329,7 +331,7 @@ class CustomRewardEnv(RedGymEnv):
     def key_events_reward(self):
         return sum(
             [
-                self.bill_said_use_cell_separator,
+                self.used_cell_separator_bill,
                 self.got_hm01,
                 self.taught_cut,
             ]
@@ -344,7 +346,7 @@ class CustomRewardEnv(RedGymEnv):
             self.seen_tiles[key] = 1
         self.tile_reward += rew
 
-    def get_levels_reward(self, level_cap=30):
+    def get_levels_reward(self, level_cap=15):
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
         ]
