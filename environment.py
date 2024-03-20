@@ -222,6 +222,7 @@ class CustomRewardEnv(RedGymEnv):
 
         self._update_event_reward_vars()
         self._update_tile_reward_vars(halt_revisit_reward=self.boost_menu_reward)
+        self._update_levels_reward()
 
         return {
             # Main milestones for story progression
@@ -232,7 +233,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # Party strength proxy
             "party_size": self.party_size * 2.0,
-            "level": self.get_levels_reward(),
+            "level": self.max_level_sum * 0.3,
 
             # Important skill: learning moves with items
             "learn_with_item": self.moves_learned_with_item * 2.0,
@@ -340,16 +341,16 @@ class CustomRewardEnv(RedGymEnv):
 
         self.tile_reward += rew
 
-    def get_levels_reward(self, level_cap=15):
+    def _update_levels_reward(self, level_cap=15):
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
         ]
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
 
-        if self.max_level_sum < level_cap:
-            return self.max_level_sum
-        else:
-            return level_cap + (self.max_level_sum - level_cap) / 4
+        # if self.max_level_sum < level_cap:
+        #     return self.max_level_sum
+        # else:
+        #     return level_cap + (self.max_level_sum - level_cap) / 4
 
 
 
