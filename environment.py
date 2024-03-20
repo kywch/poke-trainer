@@ -21,6 +21,7 @@ class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
         self.init_max_steps = env_config.max_steps
+        self.cooldown_duration = MENU_COOLDOWN
 
         #self.event_obs = np.zeros(320, dtype=np.uint8)
         self.event_count = {}  # kept for whole training run, take this when checkpointing
@@ -64,7 +65,7 @@ class CustomRewardEnv(RedGymEnv):
                 #"direction": spaces.Box(low=0, high=4, shape=(1,), dtype=np.uint8),  # TODO: replace with tree in front
 
                 # NOTE: if there are other conditions for limited reward, more flags should be added
-                "under_limited_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
+                "boost_menu_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
                 "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
             }
         )
@@ -84,7 +85,7 @@ class CustomRewardEnv(RedGymEnv):
             "party_size": np.array(self.party_size, dtype=np.uint8),  # using 8 one-hot -- CHECK ME: below 8?
             "seen_pokemon": np.array(self.seen_pokemon.sum(), dtype=np.uint8),  # a great proxy for game progression
             #"direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
-            "under_limited_reward": np.array(self.use_limited_reward, dtype=np.uint8),
+            "boost_menu_reward": np.array(self.boost_menu_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
         }
 
@@ -109,7 +110,7 @@ class CustomRewardEnv(RedGymEnv):
         return obs, info
 
     def _reset_reward_vars(self):
-        self.use_limited_reward = False
+        self.boost_menu_reward = False
 
         #self.event_obs.fill(0)
         self.experienced_events.clear()
@@ -124,7 +125,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # KEY events
         self.badges = 0
-        self.bill_said_use_cell_separator = False
+        self.used_cell_separator = False
         self.got_hm01 = False
 
         # Track action bag menu
@@ -144,8 +145,9 @@ class CustomRewardEnv(RedGymEnv):
         if self.menu_reward_cooldown > 0:
             self.menu_reward_cooldown -= 1
 
-        self.use_limited_reward = self.got_hm01_cut_but_not_learned_yet()
-        # if self.use_limited_reward:
+        self.boost_menu_reward = self.got_hm01_cut_but_not_learned_yet()
+        self.cooldown_duration = 30 if self.boost_menu_reward else MENU_COOLDOWN
+        # if self.boost_menu_reward:
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
         #     pass
@@ -160,7 +162,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # NOTE: info is not always provided
         if "stats" in info:
-            info["stats"]["under_limited_reward"] = self.use_limited_reward  # rename to hm 01, menu time?
+            info["stats"]["boost_menu_reward"] = self.boost_menu_reward
             info["stats"]["learn_with_item"] = self.moves_learned_with_item
             info["stats"]["action_bag_menu_count"] = self.action_bag_menu_count
             info["stats"]["rewarded_action_bag_menu"] = self.rewarded_action_bag_menu
@@ -182,12 +184,12 @@ class CustomRewardEnv(RedGymEnv):
                 self.action_bag_menu_count += 1
                 if self.menu_reward_cooldown == 0:
                     self.rewarded_action_bag_menu += 1
-                    self.menu_reward_cooldown = MENU_COOLDOWN
+                    self.menu_reward_cooldown = self.cooldown_duration
             if self.check_if_in_pokemon_menu():
                 self.pokemon_action_count += 1
                 if self.menu_reward_cooldown == 0:
                     self.rewared_pokemon_action += 1
-                    self.menu_reward_cooldown = MENU_COOLDOWN
+                    self.menu_reward_cooldown = self.cooldown_duration
 
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
@@ -219,21 +221,21 @@ class CustomRewardEnv(RedGymEnv):
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
 
         self._update_event_reward_vars()
-        self._update_tile_reward_vars(halt_revisit_reward=self.use_limited_reward)
+        self._update_tile_reward_vars(halt_revisit_reward=self.boost_menu_reward)
 
         return {
             # Main milestones for story progression
-            "badge": self.badges * 5.0,
-            "map_progress": self.max_map_progress * 2.0,
+            "badge": self.badges * 10.0,
+            "map_progress": self.max_map_progress * 3.0,
             #"opponent_level": self.max_opponent_level * 1.0,
-            "key_events": self.key_events_reward * 2.0,  # bill_said, got_hm01, taught_cut
+            "key_events": self.key_events_reward * 5.0,  # bill_saved, got_hm01, taught_cut
 
             # Party strength proxy
             "party_size": self.party_size * 3.0,
             "level": self.get_levels_reward(),
 
             # Important skill: learning moves with items
-            "learn_with_item": self.moves_learned_with_item * 3.0,
+            "learn_with_item": self.moves_learned_with_item * 2.0,
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
@@ -288,6 +290,7 @@ class CustomRewardEnv(RedGymEnv):
                 #           - No discount makes story progression slower after each reset
                 #           - 0-ing all known events make story progression very fast after reset, but forget events
 
+                #discount_factor = 1.0 / self.event_count[addr]
                 discount_factor = (11 - self.event_count[addr]) * 0.1 if self.event_count[addr] < 5 else 0.7
                 self.event_reward[i] = self.bit_count(val) * discount_factor
 
@@ -303,7 +306,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # Check KEY events
         self.badges = self.get_badges()
-        self.bill_said_use_cell_separator = self.read_bit(0xD7F2, 6)
+        self.used_cell_separator = self.read_bit(0xD7F2, 3)
         self.got_hm01 = self.read_bit(0xD803, 0)
 
         # Check learn moves with item -- could be spammed later, but it's fine for now
@@ -321,7 +324,7 @@ class CustomRewardEnv(RedGymEnv):
     def key_events_reward(self):
         return sum(
             [
-                self.bill_said_use_cell_separator,
+                self.used_cell_separator,
                 self.got_hm01,
                 self.taught_cut,
             ]
@@ -369,7 +372,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # getting the ss ticket, but not meeting the ticket.
 
-        return all(prev_events) # and got_hm01 and rubbed_captain and not self.taught_cut
+        return not self.taught_cut and all(prev_events) # and got_hm01 and rubbed_captain
 
     def step_decay_seen_coords(self):
         self.seen_tiles.update(

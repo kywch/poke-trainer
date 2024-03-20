@@ -12,7 +12,7 @@ unpack_batched_obs = torch.compiler.disable(unpack_batched_obs)
 #  + map progress one hot (16, check essential_map_locations)
 #  + badge one hot (9) + party size one hot (8)
 #  + seen pokemon (1), which is a great proxy for game progression
-#  + 2 flags (under_limited_reward, cut_in_party)
+#  + 2 flags (boost_menu_reward, cut_in_party)
 FLAT_DIM = 1920 + 256 + 16 + 9 + 8 + 1 + 2
 
 
@@ -111,7 +111,7 @@ class MultiConvolutionalPolicy(pufferlib.models.Policy):
                     one_hot(observations["party_size"].long(), 8).float().squeeze(1),
                     observations["seen_pokemon"].float() / 128.0,  # max: 152 
                     #one_hot(observations["direction"].long(), 4).float().squeeze(1),
-                    observations["under_limited_reward"].float(),
+                    observations["boost_menu_reward"].float(),
                     observations["cut_in_party"].float(),
                 ),
                 dim=-1,
