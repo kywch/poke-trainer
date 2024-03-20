@@ -246,10 +246,10 @@ class CustomRewardEnv(RedGymEnv):
             # These kick in when agent is "stuck"
 
             # NOTE: exploring "newer" tiles is the main driver of progression
-            # Visit decay makes the explore reward "dense" ... little reward everywhere
-            # so agents are motivated to explore new coords and/or revisit old coords
-            #"explore_tile": self.tile_reward * 0.01,  
-            "explore_tile": len(self.seen_coords) * 0.04, # KEEP THIS CONSTANT
+            # Tile reward should be large enough to provide a thrust to move forward.
+            # Agents encounter events/milestone only by moving forward.
+            # The goal is to provide enough thrust to hit interesting events, but NOT TO MUCH to ignore these
+            "explore_tile": len(self.seen_coords) * 0.05,  # from 0.02 in pokegym/leanke
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 2.0,  # more related to story progression?
