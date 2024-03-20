@@ -229,7 +229,7 @@ class CustomRewardEnv(RedGymEnv):
         return {
             # Main milestones for story progression
             "badge": self.badges * 10.0,
-            "map_progress": self.max_map_progress * 2.0,
+            "map_progress": self.max_map_progress * 3.0,
             "opponent_level": self.max_opponent_level * 2.0,
             "key_events": self.key_events_reward * 5.0,  # bill_saved, got_hm01, taught_cut
 
@@ -240,7 +240,7 @@ class CustomRewardEnv(RedGymEnv):
             # Important skill: learning moves with items
             "caught_pokemon": self.caught_pokemon.sum() * 4.0,
             "learn_with_item": self.moves_learned_with_item * 4.0,
-            "moves_obtained": self.curr_moves * 1.0,  # try to learn new moves, via menuing?
+            "moves_obtained": self.curr_moves * 0.1,  # try to learn new moves, via menuing?
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
