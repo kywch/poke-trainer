@@ -249,7 +249,7 @@ class CustomRewardEnv(RedGymEnv):
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
             #"explore_tile": self.tile_reward * 0.01,  
-            "explore_tile": len(self.seen_coords) * 0.03, # KEEP THIS CONSTANT
+            "explore_tile": len(self.seen_coords) * 0.04, # KEEP THIS CONSTANT
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 2.0,  # more related to story progression?
