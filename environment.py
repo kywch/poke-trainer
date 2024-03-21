@@ -64,8 +64,9 @@ class CustomRewardEnv(RedGymEnv):
         self.decay_factor_coords = 0.9995
 
         self.npc_reward = 0
-        self.talked_npcs = {}
-        self.decay_factor_npcs = 0.999
+        self.talked_npcs = set()  # {}
+        # self.decay_factor_npcs = 0.999
+        self.forget_frequency_npc = 10000  # clear talked_npcs every 10000 steps
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -176,8 +177,6 @@ class CustomRewardEnv(RedGymEnv):
         #     pass
 
         # Apply decay on the seen coords and npcs
-        if self.step_count % self.decay_frequency == 0:
-            self.step_decay_seen_coords()
 
         obs, rew, reset, _, info = super().step(action)
 
@@ -370,6 +369,9 @@ class CustomRewardEnv(RedGymEnv):
             return level_cap + (self.max_level_sum - level_cap) / 4
 
     def _update_tile_reward_vars(self):
+        if self.step_count % self.decay_frequency == 0:
+            self.step_decay_seen_coords()
+
         key = self.get_game_coords()
         if key not in self.seen_tiles:
             rew = self.seen_tiles[key] = 1
@@ -381,6 +383,9 @@ class CustomRewardEnv(RedGymEnv):
 
     # NOTE: this is duplicate from pokemonred_puffer. TODO: remove redunduncy
     def _update_npc_reward_vars(self):
+        if self.step_count % self.forget_frequency_npc == 0:
+            self.talked_npcs.clear()
+
         if self.read_m(BATTLE_FLAG) == 0 and self.pyboy.get_memory_value(TEXT_BOX_UP) > 0:
             player_direction = self.pyboy.get_memory_value(0xC109)
             player_y = self.pyboy.get_memory_value(0xC104)
@@ -403,23 +408,29 @@ class CustomRewardEnv(RedGymEnv):
             if npc_candidates:
                 map_id = self.pyboy.get_memory_value(0xD35E)
                 _, npc_id = min(npc_candidates, key=lambda x: x[0])
+
+                # NOTE: npc reward with full forgetting
                 if (map_id, npc_id) not in self.talked_npcs:
-                    rew = self.talked_npcs[(map_id, npc_id)] = 1
-                else:
-                    rew = 1 - self.talked_npcs[(map_id, npc_id)]
-                    self.talked_npcs[(map_id, npc_id)] = 1
-                
-                self.npc_reward += rew
+                    self.talked_npcs.add((map_id, npc_id))
+                    self.npc_reward += 1
+
+                # NOTE: npc memory decay
+                # if (map_id, npc_id) not in self.talked_npcs:
+                #     rew = self.talked_npcs[(map_id, npc_id)] = 1
+                # else:
+                #     rew = 1 - self.talked_npcs[(map_id, npc_id)]
+                #     self.talked_npcs[(map_id, npc_id)] = 1
+                # self.npc_reward += rew
 
     def step_decay_seen_coords(self):
         self.seen_tiles.update(
             (k, max(0.3, v * self.decay_factor_coords))
             for k, v in self.seen_tiles.items()
         )
-        self.talked_npcs.update(
-            (k, max(0.3, v * self.decay_factor_npcs))
-            for k, v in self.talked_npcs.items()
-        )
+        # self.talked_npcs.update(
+        #     (k, max(0.3, v * self.decay_factor_npcs))
+        #     for k, v in self.talked_npcs.items()
+        # )
 
         # NOTE: potentially useful?
         # self.seen_map_ids *= self.step_forgetting_factor["map_ids"]
