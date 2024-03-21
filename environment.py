@@ -268,8 +268,8 @@ class CustomRewardEnv(RedGymEnv):
             "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_npcs": sum(self.seen_npcs.values()) * 0.03,  # talk to new npcs
-            "explore_hidden_objs": sum(self.seen_hidden_objs.values()) * 0.02,  # look for new hidden objs
+            "explore_npcs": len(self.seen_npcs) * 0.001,  # talk to new npcs
+            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
 
             # Make these better than nothing, but do not let these be larger than the above
@@ -376,10 +376,10 @@ class CustomRewardEnv(RedGymEnv):
             (k, max(0.15, v * self.decay_factor_coords))
             for k, v in self.seen_tiles.items()
         )
-        self.seen_npcs.update(
-            (k, max(0.15, v * self.decay_factor_npcs))
-            for k, v in self.seen_npcs.items()
-        )
+        # self.seen_npcs.update(
+        #     (k, max(0.15, v * self.decay_factor_npcs))
+        #     for k, v in self.seen_npcs.items()
+        # )
 
         # NOTE: potentially useful?
         # self.seen_map_ids *= self.step_forgetting_factor["map_ids"]
