@@ -16,12 +16,24 @@ MUSEUM_TICKET = (0xD754, 0)
 MENU_COOLDOWN = 200
 PRESS_BUTTON_A = 5
 
+# Map ids to visit in sequene -- CANNOT use the map id more than once
+STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridian city
+                  13, 51, 2, 54,    # Route 2 - Viridian forest - Pewter city - Pewter gym
+                  14, 59, 60, 61,   # Route 3 - Mt Moon: Route 3 - B1F - B2F
+                  15, 3, 65, 35,    # Route 4 - Cerulean city - Cerulean gym - Route 24
+                  36, 16, 17, 5,    # Route 25 - Route 5 - Route 6 - Vermilion city
+                  92]               # Vermilion gym (can go there after learning cut)
+
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
         self.init_max_steps = env_config.max_steps
         self.cooldown_duration = MENU_COOLDOWN
+
+        self.essential_map_locations = {
+            v: i for i, v in enumerate(STORY_PROGRESS)
+        }
 
         #self.event_obs = np.zeros(320, dtype=np.uint8)
         self.event_count = {}  # kept for whole training run, take this when checkpointing
@@ -221,7 +233,6 @@ class CustomRewardEnv(RedGymEnv):
 
         self._update_event_reward_vars()
         self._update_tile_reward_vars(halt_revisit_reward=self.boost_menu_reward)
-        self._update_levels_reward()
 
         return {
             # Main milestones for story progression
@@ -232,7 +243,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # Party strength proxy
             "party_size": self.party_size * 2.0,
-            "level": self.max_level_sum * 0.3,
+            "level": self.level_reward,
 
             # Important skill: learning moves with items
             "learn_with_item": self.moves_learned_with_item * 2.0,
@@ -342,16 +353,18 @@ class CustomRewardEnv(RedGymEnv):
 
         self.tile_reward += rew
 
-    def _update_levels_reward(self, level_cap=15):
+    @property
+    def level_reward(self):
         party_levels = [
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
         ]
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
 
-        # if self.max_level_sum < level_cap:
-        #     return self.max_level_sum
-        # else:
-        #     return level_cap + (self.max_level_sum - level_cap) / 4
+        level_cap = 15
+        if self.max_level_sum < level_cap:
+            return self.max_level_sum
+        else:
+            return level_cap + (self.max_level_sum - level_cap) / 4
 
 
 
