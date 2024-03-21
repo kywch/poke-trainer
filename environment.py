@@ -277,7 +277,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # If the above doesn't work, try these in the order of importance
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
-            "explore_npcs": self.npc_reward * 0.005,  # talk to npcs, getting discounted rew for revisiting
+            "explore_npcs": self.npc_reward * 0.003,  # talk to npcs, getting discounted rew for revisiting
 
             # Make these better than nothing, but do not let these be larger than the above
             "bag_menu_action": self.rewarded_action_bag_menu * 0.0001,
