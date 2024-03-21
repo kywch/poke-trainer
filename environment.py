@@ -16,6 +16,8 @@ MUSEUM_TICKET = (0xD754, 0)
 MENU_COOLDOWN = 200
 PRESS_BUTTON_A = 5
 
+BASE_ENEMY_LEVEL = 4
+
 # Map ids to visit in sequene -- CANNOT use the map id more than once
 STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridian city
                   13, 51, 2, 54,    # Route 2 - Viridian forest - Pewter city - Pewter gym
@@ -157,7 +159,7 @@ class CustomRewardEnv(RedGymEnv):
             self.menu_reward_cooldown -= 1
 
         self.boost_menu_reward = self.got_hm01_cut_but_not_learned_yet()
-        self.cooldown_duration = 30 if self.boost_menu_reward else MENU_COOLDOWN
+        self.cooldown_duration = 30 if self.boost_menu_reward is False else MENU_COOLDOWN
         # if self.boost_menu_reward:
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
@@ -237,8 +239,8 @@ class CustomRewardEnv(RedGymEnv):
         return {
             # Main milestones for story progression
             "badge": self.badges * 10.0,
-            "map_progress": self.max_map_progress * 2.0,
-            "opponent_level": self.max_opponent_level * 2.0,
+            "map_progress": self.max_map_progress * 3.0,
+            "opponent_level": (self.max_opponent_level - BASE_ENEMY_LEVEL) * 2.0,
             "key_events": self.key_events_reward * 4.0,
 
             # Party strength proxy
@@ -257,7 +259,7 @@ class CustomRewardEnv(RedGymEnv):
             "explore_tile": self.tile_reward * 0.01,
 
             # First, always search for new pokemon and events
-            "seen_pokemon": self.seen_pokemon.sum() * 1.5,  # more related to story progression?
+            "seen_pokemon": self.seen_pokemon.sum() * 2.0,  # more related to story progression?
 
             # NOTE: there seems to be a lot of irrevant events?
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
@@ -339,6 +341,9 @@ class CustomRewardEnv(RedGymEnv):
         self.curr_moves = new_moves
         self.curr_item_num = self.read_m(0xD31D)
 
+    def got_hm01_cut_but_not_learned_yet(self):
+        return not self.taught_cut and all(self.key_events_to_cut)
+
     @property
     def key_events_reward(self):
         return sum(self.key_events_to_cut) + self.taught_cut
@@ -365,14 +370,6 @@ class CustomRewardEnv(RedGymEnv):
             return self.max_level_sum
         else:
             return level_cap + (self.max_level_sum - level_cap) / 4
-
-
-
-
-    ##########################################################################
-
-    def got_hm01_cut_but_not_learned_yet(self):
-        return not self.taught_cut and all(self.key_events_to_cut)
 
     def step_decay_seen_coords(self):
         self.seen_tiles.update(
