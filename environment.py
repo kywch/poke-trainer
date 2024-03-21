@@ -11,12 +11,16 @@ from pokemonred_puffer.environment import (
     PARTY_LEVEL_ADDRS,
 )
 
-MUSEUM_TICKET = (0xD754, 0)
+ITEM_COUNT = 0xD31D
+BATTLE_FLAG = 0xD057
+TEXT_BOX_UP = 0xCFC4
+
 
 MENU_COOLDOWN = 200
 PRESS_BUTTON_A = 5
 
 BASE_ENEMY_LEVEL = 4
+MUSEUM_TICKET = (0xD754, 0)
 
 # Map ids to visit in sequene -- CANNOT use the map id more than once
 STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridian city
@@ -54,11 +58,14 @@ class CustomRewardEnv(RedGymEnv):
         # not well understood the dynamics yet. Buy decaying the value when there are so many coords
         # decrease the summed value much and thus push the agents to visit new coord more, just to fill it
         # Thus using MaxLengthWrapper to cap the seen coords at 3000
+        self.decay_frequency = 10
         self.tile_reward = 0
         self.seen_tiles = {}
         self.decay_factor_coords = 0.9995
-        self.decay_factor_npcs = 0.995
-        self.decay_frequency = 10
+
+        self.npc_reward = 0
+        self.talked_npcs = {}
+        self.decay_factor_npcs = 0.999
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -114,6 +121,7 @@ class CustomRewardEnv(RedGymEnv):
         # So they should be reset every episode
         if self.first is False:
             self.seen_tiles.clear()
+            self.talked_npcs.clear()
             self.seen_coords.clear()
             self.seen_npcs.clear()
             self.seen_hidden_objs.clear()
@@ -134,8 +142,9 @@ class CustomRewardEnv(RedGymEnv):
         self._update_event_obs()
         self.consumed_item_count = 0
 
-        self.tile_reward = 0
         self.max_level_sum = 0
+        self.tile_reward = 0
+        self.npc_reward = 0
 
         # KEY events
         self.badges = 0
@@ -183,10 +192,10 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["rewared_pokemon_action"] = self.rewared_pokemon_action
             info["stats"]["consumed_item_count"] = self.consumed_item_count
 
-            # Does the events get correctly reset?
-            # NOTE: event is not resetting to 0. REVISIT THIS
+            # Decay-applied rewards
             info["stats"]["new_event_reward"] = self.event_reward.sum()
             info["stats"]["new_tile_reward"] = self.tile_reward
+            info["stats"]["new_npc_reward"] = self.npc_reward
 
         return obs, rew, reset, False, info
 
@@ -206,19 +215,16 @@ class CustomRewardEnv(RedGymEnv):
 
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
-        # if has hm01 cut, then do not give normal reward until cut is learned
-        # if self.use_limited_reward:
-        #     if self.just_learned_item_move > 0:  # encourage any learning from item
-        #         self.moves_learned_with_item += 1
-        #         return 0.1
-        #     # encourage going to action bag menu with very small reward
-        #     if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
-        #         self.menu_reward_cooldown = 30
-        #         self.action_bag_menu_count += 1
-        #         self.rewarded_action_bag_menu += 1
-        #         return 0.001
-        #     # None of the above -- no reward
-        #     return 0
+        # NOTE: this is extreme item-action reward boosting
+        if self.boost_menu_reward is True:
+            # encourage going to action bag menu with very small reward
+            if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
+                self.menu_reward_cooldown = 30
+                self.action_bag_menu_count += 1
+                self.rewarded_action_bag_menu += 1
+                return 0.001
+            # other actions -- no reward
+            return 0
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()
@@ -234,7 +240,8 @@ class CustomRewardEnv(RedGymEnv):
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
 
         self._update_event_reward_vars()
-        self._update_tile_reward_vars(halt_revisit_reward=self.boost_menu_reward)
+        self._update_tile_reward_vars()
+        self._update_npc_reward_vars()
 
         return {
             # Main milestones for story progression
@@ -248,7 +255,8 @@ class CustomRewardEnv(RedGymEnv):
             "level": self.level_reward,
 
             # Important skill: learning moves with items
-            "learn_with_item": self.moves_learned_with_item * 2.0,
+            "learn_with_item": self.moves_learned_with_item * 3.0,
+            "moves_obtained": self.curr_moves * 0.1,  # try to learn new moves, via menuing?
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
@@ -268,9 +276,8 @@ class CustomRewardEnv(RedGymEnv):
             "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_npcs": len(self.seen_npcs) * 0.001,  # talk to new npcs
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
-            "moves_obtained": self.curr_moves * 0.01,  # try to learn new moves, via menuing?
+            "explore_npcs": self.npc_reward * 0.005,  # talk to npcs, getting discounted rew for revisiting
 
             # Make these better than nothing, but do not let these be larger than the above
             "bag_menu_action": self.rewarded_action_bag_menu * 0.0001,
@@ -333,13 +340,13 @@ class CustomRewardEnv(RedGymEnv):
         # Check learn moves with item -- could be spammed later, but it's fine for now
         new_moves = self.moves_obtained.sum()
         self.just_learned_item_move = 0
-        if self.read_m(0xD31D) < self.curr_item_num:  # item consumed/tossed?
+        if self.read_m(ITEM_COUNT) < self.curr_item_num:  # item consumed/tossed?
             self.consumed_item_count += 1
             if new_moves > self.curr_moves:  # move learned
                 self.moves_learned_with_item += 1
                 self.just_learned_item_move = 1
         self.curr_moves = new_moves
-        self.curr_item_num = self.read_m(0xD31D)
+        self.curr_item_num = self.read_m(ITEM_COUNT)
 
     def got_hm01_cut_but_not_learned_yet(self):
         return not self.taught_cut and all(self.key_events_to_cut)
@@ -347,16 +354,6 @@ class CustomRewardEnv(RedGymEnv):
     @property
     def key_events_reward(self):
         return sum(self.key_events_to_cut) + self.taught_cut
-
-    def _update_tile_reward_vars(self, halt_revisit_reward=False):
-        key = self.get_game_coords()
-        if key not in self.seen_tiles:
-            rew = self.seen_tiles[key] = 1
-        else:
-            rew = 1 - self.seen_tiles[key] if halt_revisit_reward is False else 0
-            self.seen_tiles[key] = 1
-
-        self.tile_reward += rew
 
     @property
     def level_reward(self):
@@ -371,15 +368,57 @@ class CustomRewardEnv(RedGymEnv):
         else:
             return level_cap + (self.max_level_sum - level_cap) / 4
 
+    def _update_tile_reward_vars(self):
+        key = self.get_game_coords()
+        if key not in self.seen_tiles:
+            rew = self.seen_tiles[key] = 1
+        else:
+            rew = 1 - self.seen_tiles[key]
+            self.seen_tiles[key] = 1
+
+        self.tile_reward += rew
+
+    # NOTE: this is duplicate from pokemonred_puffer. TODO: remove redunduncy
+    def _update_npc_reward_vars(self):
+        if self.read_m(BATTLE_FLAG) == 0 and self.pyboy.get_memory_value(TEXT_BOX_UP) > 0:
+            player_direction = self.pyboy.get_memory_value(0xC109)
+            player_y = self.pyboy.get_memory_value(0xC104)
+            player_x = self.pyboy.get_memory_value(0xC106)
+            # get the npc who is closest to the player and facing them
+            # we go through all npcs because there are npcs like
+            # nurse joy who can be across a desk and still talk to you
+
+            # npc_id 0 is the player
+            npc_distances = (
+                (
+                    self.find_neighboring_npc(npc_id, player_direction, player_x, player_y),
+                    npc_id,
+                )
+                for npc_id in range(1, self.pyboy.get_memory_value(0xD4E1))  # WNUMSPRITES
+            )
+            npc_candidates = [x for x in npc_distances if x[0]]
+
+            # interacted with an npc
+            if npc_candidates:
+                map_id = self.pyboy.get_memory_value(0xD35E)
+                _, npc_id = min(npc_candidates, key=lambda x: x[0])
+                if (map_id, npc_id) not in self.talked_npcs:
+                    rew = self.talked_npcs[(map_id, npc_id)] = 1
+                else:
+                    rew = 1 - self.talked_npcs[(map_id, npc_id)]
+                    self.talked_npcs[(map_id, npc_id)] = 1
+                
+                self.npc_reward += rew
+
     def step_decay_seen_coords(self):
         self.seen_tiles.update(
-            (k, max(0.15, v * self.decay_factor_coords))
+            (k, max(0.3, v * self.decay_factor_coords))
             for k, v in self.seen_tiles.items()
         )
-        # self.seen_npcs.update(
-        #     (k, max(0.15, v * self.decay_factor_npcs))
-        #     for k, v in self.seen_npcs.items()
-        # )
+        self.talked_npcs.update(
+            (k, max(0.3, v * self.decay_factor_npcs))
+            for k, v in self.talked_npcs.items()
+        )
 
         # NOTE: potentially useful?
         # self.seen_map_ids *= self.step_forgetting_factor["map_ids"]
