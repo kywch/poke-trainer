@@ -92,7 +92,7 @@ class CustomRewardEnv(RedGymEnv):
             # "x": np.array(player_x, dtype=np.uint8),
             # "y": np.array(player_y, dtype=np.uint8),
             "curr_map_idx": np.array(map_idx, dtype=np.uint8),  # using 256 one-hot
-            "map_progress": np.array(self.max_map_progress, dtype=np.uint8),  # using 16 one-hot
+            "map_progress": np.array(self.max_map_progress + 1, dtype=np.uint8),  # using 32 one-hot, 21 map locs
             "num_badge": np.array(self.get_badges(), dtype=np.uint8),  # using 9 one-hot
             "party_size": np.array(self.party_size, dtype=np.uint8),  # using 8 one-hot -- CHECK ME: below 8?
             "seen_pokemon": np.array(self.seen_pokemon.sum(), dtype=np.uint8),  # a great proxy for game progression
