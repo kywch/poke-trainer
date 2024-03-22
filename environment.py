@@ -304,8 +304,11 @@ class CustomRewardEnv(RedGymEnv):
             "explore_npcs": self.npc_reward * 0.01,  # talk to npcs, getting discounted rew for revisiting
 
             # Make these better than nothing, but do not let these be larger than the above
-            "bag_menu_action": self.rewarded_action_bag_menu * 0.0001,
-            "pokemon_menu_action": self.rewared_pokemon_action * 0.0001,
+            "bag_menu_action": self.rewarded_action_bag_menu * 0.001,
+            "pokemon_menu_action": self.rewared_pokemon_action * 0.001,
+
+            # Cost per step, to encourage any action
+            "cost_per_step": self.step_count * -0.0003,  # ~40 at 132k steps
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
