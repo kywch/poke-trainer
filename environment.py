@@ -66,7 +66,8 @@ class CustomRewardEnv(RedGymEnv):
         self.npc_reward = 0
         self.talked_npcs = set()  # {}
         # self.decay_factor_npcs = 0.999
-        self.forget_frequency_npc = 10000  # clear talked_npcs every 10000 steps
+        # 10000 seems to be small, so that agents went back to the same npc to get reward
+        self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
