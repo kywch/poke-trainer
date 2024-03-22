@@ -31,6 +31,28 @@ STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridia
                   92]               # Vermilion gym (can go there after learning cut)
 
 
+class MaxLenQueue:
+    def __init__(self, maxlen):
+        self.maxlen = maxlen
+        self.queue = []
+        self.unique_items = set()
+
+    def append(self, item) -> bool:
+        if item in self.unique_items:
+            return False
+
+        if len(self.queue) >= self.maxlen:
+            del_item = self.queue.pop(0)
+            self.unique_items.remove(del_item)
+
+        self.queue.append(item)
+        self.unique_items.add(item)
+        return True
+
+    def clear(self):
+        self.queue.clear()
+        self.unique_items.clear()
+
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
@@ -64,10 +86,11 @@ class CustomRewardEnv(RedGymEnv):
         self.decay_factor_coords = 0.9995
 
         self.npc_reward = 0
-        self.talked_npcs = set()  # {}
+        self.talked_npcs = MaxLenQueue(50)  # keep the last 50 npcs
+        # self.talked_npcs = set()  # {}
         # self.decay_factor_npcs = 0.999
-        # 10000 seems to be small, so that agents went back to the same npc to get reward
-        self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
+        # NOTE: 10000 seems to be small, so that agents went back to the same npc to get reward
+        # self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -121,9 +144,9 @@ class CustomRewardEnv(RedGymEnv):
 
         # NOTE: these dict are used for exploration decay within episode
         # So they should be reset every episode
+        self.seen_tiles.clear()
+        self.talked_npcs.clear()
         if self.first is False:
-            self.seen_tiles.clear()
-            self.talked_npcs.clear()
             self.seen_coords.clear()
             self.seen_npcs.clear()
             self.seen_hidden_objs.clear()
@@ -384,8 +407,8 @@ class CustomRewardEnv(RedGymEnv):
 
     # NOTE: this is duplicate from pokemonred_puffer. TODO: remove redunduncy
     def _update_npc_reward_vars(self):
-        if self.step_count % self.forget_frequency_npc == 0:
-            self.talked_npcs.clear()
+        # if self.step_count % self.forget_frequency_npc == 0:
+        #     self.talked_npcs.clear()
 
         if self.read_m(BATTLE_FLAG) == 0 and self.pyboy.get_memory_value(TEXT_BOX_UP) > 0:
             player_direction = self.pyboy.get_memory_value(0xC109)
@@ -410,10 +433,13 @@ class CustomRewardEnv(RedGymEnv):
                 map_id = self.pyboy.get_memory_value(0xD35E)
                 _, npc_id = min(npc_candidates, key=lambda x: x[0])
 
+                # NOTE: if the npc is not seen for last 50 npcs, give reward
+                self.npc_reward += 1 if self.talked_npcs.append((map_id, npc_id)) else 0
+
                 # NOTE: npc reward with full forgetting
-                if (map_id, npc_id) not in self.talked_npcs:
-                    self.talked_npcs.add((map_id, npc_id))
-                    self.npc_reward += 1
+                # if (map_id, npc_id) not in self.talked_npcs:
+                #     self.talked_npcs.add((map_id, npc_id))
+                #     self.npc_reward += 1
 
                 # NOTE: npc memory decay
                 # if (map_id, npc_id) not in self.talked_npcs:
