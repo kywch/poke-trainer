@@ -31,27 +31,27 @@ STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridia
                   92]               # Vermilion gym (can go there after learning cut)
 
 
-class MaxLenQueue:
-    def __init__(self, maxlen):
-        self.maxlen = maxlen
-        self.queue = []
-        self.unique_items = set()
+# class MaxLenQueue:
+#     def __init__(self, maxlen):
+#         self.maxlen = maxlen
+#         self.queue = []
+#         self.unique_items = set()
 
-    def append(self, item) -> bool:
-        if item in self.unique_items:
-            return False
+#     def append(self, item) -> bool:
+#         if item in self.unique_items:
+#             return False
 
-        if len(self.queue) >= self.maxlen:
-            del_item = self.queue.pop(0)
-            self.unique_items.remove(del_item)
+#         if len(self.queue) >= self.maxlen:
+#             del_item = self.queue.pop(0)
+#             self.unique_items.remove(del_item)
 
-        self.queue.append(item)
-        self.unique_items.add(item)
-        return True
+#         self.queue.append(item)
+#         self.unique_items.add(item)
+#         return True
 
-    def clear(self):
-        self.queue.clear()
-        self.unique_items.clear()
+#     def clear(self):
+#         self.queue.clear()
+#         self.unique_items.clear()
 
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
@@ -86,9 +86,9 @@ class CustomRewardEnv(RedGymEnv):
         self.decay_factor_coords = 0.9995
 
         self.npc_reward = 0
-        self.talked_npcs = MaxLenQueue(50)  # keep the last 50 npcs
-        # self.talked_npcs = set()  # {}
-        # self.decay_factor_npcs = 0.999
+        #self.talked_npcs = MaxLenQueue(50)  # keep the last 50 npcs
+        self.talked_npcs = {}  # set()  # {}
+        self.decay_factor_npcs = 0.999
         # NOTE: 10000 seems to be small, so that agents went back to the same npc to get reward
         # self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
 
@@ -194,7 +194,7 @@ class CustomRewardEnv(RedGymEnv):
             self.menu_reward_cooldown -= 1
 
         self.boost_menu_reward = self.got_hm01_cut_but_not_learned_yet()
-        self.cooldown_duration = 30 if self.boost_menu_reward is False else MENU_COOLDOWN
+        self.cooldown_duration = 0 if self.boost_menu_reward is False else MENU_COOLDOWN
         # if self.boost_menu_reward:
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
@@ -240,15 +240,15 @@ class CustomRewardEnv(RedGymEnv):
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
         # NOTE: this is extreme item-action reward boosting
-        if self.boost_menu_reward is True:
-            # encourage going to action bag menu with very small reward
-            if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
-                self.menu_reward_cooldown = 30
-                self.action_bag_menu_count += 1
-                self.rewarded_action_bag_menu += 1
-                return 0.001
-            # other actions -- no reward
-            return 0
+        # if self.boost_menu_reward is True:
+        #     # encourage going to action bag menu with very small reward
+        #     if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
+        #         self.menu_reward_cooldown = 30
+        #         self.action_bag_menu_count += 1
+        #         self.rewarded_action_bag_menu += 1
+        #         return 0.001
+        #     # other actions -- no reward
+        #     return 0
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()
@@ -262,6 +262,9 @@ class CustomRewardEnv(RedGymEnv):
     def get_game_state_reward(self, print_stats=False):
         # addresses from https://datacrystal.romhacking.net/wiki/Pok%C3%A9mon_Red/Blue:RAM_map
         # https://github.com/pret/pokered/blob/91dc3c9f9c8fd529bb6e8307b58b96efa0bec67e/constants/event_constants.asm
+
+        if self.step_count % self.decay_frequency == 0:
+            self.step_decay_memory_tile_npc()
 
         self._update_event_reward_vars()
         self._update_tile_reward_vars()
@@ -307,8 +310,8 @@ class CustomRewardEnv(RedGymEnv):
             "bag_menu_action": self.rewarded_action_bag_menu * 0.001,
             "pokemon_menu_action": self.rewared_pokemon_action * 0.001,
 
-            # Cost per step, to encourage any action
-            "cost_per_step": self.step_count * -0.0003,  # ~40 at 132k steps
+            # Charge cost per step, to encourage any action
+            "step_cost": self.step_count * -0.0003,  # ~40 at 132k steps
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
@@ -396,9 +399,6 @@ class CustomRewardEnv(RedGymEnv):
             return level_cap + (self.max_level_sum - level_cap) / 4
 
     def _update_tile_reward_vars(self):
-        if self.step_count % self.decay_frequency == 0:
-            self.step_decay_seen_coords()
-
         key = self.get_game_coords()
         if key not in self.seen_tiles:
             rew = self.seen_tiles[key] = 1
@@ -437,7 +437,7 @@ class CustomRewardEnv(RedGymEnv):
                 _, npc_id = min(npc_candidates, key=lambda x: x[0])
 
                 # NOTE: if the npc is not seen for last 50 npcs, give reward
-                self.npc_reward += 1 if self.talked_npcs.append((map_id, npc_id)) else 0
+                #self.npc_reward += 1 if self.talked_npcs.append((map_id, npc_id)) else 0
 
                 # NOTE: npc reward with full forgetting
                 # if (map_id, npc_id) not in self.talked_npcs:
@@ -445,22 +445,22 @@ class CustomRewardEnv(RedGymEnv):
                 #     self.npc_reward += 1
 
                 # NOTE: npc memory decay
-                # if (map_id, npc_id) not in self.talked_npcs:
-                #     rew = self.talked_npcs[(map_id, npc_id)] = 1
-                # else:
-                #     rew = 1 - self.talked_npcs[(map_id, npc_id)]
-                #     self.talked_npcs[(map_id, npc_id)] = 1
-                # self.npc_reward += rew
+                if (map_id, npc_id) not in self.talked_npcs:
+                    rew = self.talked_npcs[(map_id, npc_id)] = 1
+                else:
+                    rew = 1 - self.talked_npcs[(map_id, npc_id)]
+                    self.talked_npcs[(map_id, npc_id)] = 1
+                self.npc_reward += rew
 
-    def step_decay_seen_coords(self):
+    def step_decay_memory_tile_npc(self):
         self.seen_tiles.update(
             (k, max(0.3, v * self.decay_factor_coords))
             for k, v in self.seen_tiles.items()
         )
-        # self.talked_npcs.update(
-        #     (k, max(0.3, v * self.decay_factor_npcs))
-        #     for k, v in self.talked_npcs.items()
-        # )
+        self.talked_npcs.update(
+            (k, max(0.3, v * self.decay_factor_npcs))
+            for k, v in self.talked_npcs.items()
+        )
 
         # NOTE: potentially useful?
         # self.seen_map_ids *= self.step_forgetting_factor["map_ids"]
