@@ -88,7 +88,7 @@ class CustomRewardEnv(RedGymEnv):
         self.npc_reward = 0
         #self.talked_npcs = MaxLenQueue(50)  # keep the last 50 npcs
         self.talked_npcs = {}  # set()  # {}
-        self.decay_factor_npcs = 0.9995
+        self.decay_factor_npcs = 0.999
         # NOTE: 10000 seems to be small, so that agents went back to the same npc to get reward
         # self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
 
