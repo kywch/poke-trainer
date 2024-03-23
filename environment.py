@@ -311,7 +311,7 @@ class CustomRewardEnv(RedGymEnv):
             "pokemon_menu_action": self.rewared_pokemon_action * 0.001,
 
             # Charge cost per step, to encourage any action
-            "step_cost": self.step_count * -0.0003,  # ~40 at 132k steps
+            #"step_cost": self.step_count * -0.0003,  # ~40 at 132k steps
 
             # Cut-related. Revisit later.
             "cut_coords": sum(self.cut_coords.values()) * 1.0,
