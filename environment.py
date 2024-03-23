@@ -83,12 +83,12 @@ class CustomRewardEnv(RedGymEnv):
         self.decay_frequency = 10
         self.tile_reward = 0
         self.seen_tiles = {}
-        self.decay_factor_coords = 0.9995
+        self.decay_factor_coords = 0.9999
 
         self.npc_reward = 0
         #self.talked_npcs = MaxLenQueue(50)  # keep the last 50 npcs
         self.talked_npcs = {}  # set()  # {}
-        self.decay_factor_npcs = 0.999
+        self.decay_factor_npcs = 0.9997
         # NOTE: 10000 seems to be small, so that agents went back to the same npc to get reward
         # self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
 
@@ -194,7 +194,7 @@ class CustomRewardEnv(RedGymEnv):
             self.menu_reward_cooldown -= 1
 
         self.boost_menu_reward = self.got_hm01_cut_but_not_learned_yet()
-        self.cooldown_duration = 0 if self.boost_menu_reward is False else MENU_COOLDOWN
+        self.cooldown_duration = MENU_COOLDOWN if self.boost_menu_reward is False else 0
         # if self.boost_menu_reward:
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
@@ -303,7 +303,7 @@ class CustomRewardEnv(RedGymEnv):
             "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
+            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.03,  # look for new hidden objs
             "explore_npcs": self.npc_reward * 0.01,  # talk to npcs, getting discounted rew for revisiting
 
             # Make these better than nothing, but do not let these be larger than the above
