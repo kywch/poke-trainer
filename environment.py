@@ -16,7 +16,7 @@ BATTLE_FLAG = 0xD057
 TEXT_BOX_UP = 0xCFC4
 
 
-MENU_COOLDOWN = 200
+MENU_COOLDOWN = 30
 PRESS_BUTTON_A = 5
 
 BASE_ENEMY_LEVEL = 4
@@ -88,7 +88,7 @@ class CustomRewardEnv(RedGymEnv):
         self.npc_reward = 0
         #self.talked_npcs = MaxLenQueue(50)  # keep the last 50 npcs
         self.talked_npcs = {}  # set()  # {}
-        self.decay_factor_npcs = 0.995
+        self.decay_factor_npcs = 0.999
         # NOTE: 10000 seems to be small, so that agents went back to the same npc to get reward
         # self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
 
@@ -300,15 +300,15 @@ class CustomRewardEnv(RedGymEnv):
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
             # after seeing this, implemented the experienced event reward discounting
-            "event": self.max_event_rew * 1.2,
+            "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "explore_npcs": self.npc_reward * 0.01,  # talk to npcs, getting discounted rew for revisiting
 
             # Make these better than nothing, but do not let these be larger than the above
-            "bag_menu_action": self.rewarded_action_bag_menu * 0.001,
-            "pokemon_menu_action": self.rewared_pokemon_action * 0.001,
+            "bag_menu_action": self.rewarded_action_bag_menu * 0.0001,
+            "pokemon_menu_action": self.rewared_pokemon_action * 0.0001,
 
             # Charge cost per step, to encourage any action
             #"step_cost": self.step_count * -0.0003,  # ~40 at 132k steps
