@@ -303,7 +303,7 @@ class CustomRewardEnv(RedGymEnv):
             "event": self.max_event_rew * 1.0,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.03,  # look for new hidden objs
+            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
             "explore_npcs": self.npc_reward * 0.01,  # talk to npcs, getting discounted rew for revisiting
 
             # Make these better than nothing, but do not let these be larger than the above
