@@ -300,7 +300,7 @@ class CustomRewardEnv(RedGymEnv):
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
             # after seeing this, implemented the experienced event reward discounting
-            "event": self.max_event_rew * 1.0,
+            "event": self.max_event_rew * 1.2,
 
             # If the above doesn't work, try these in the order of importance
             "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
