@@ -240,15 +240,15 @@ class CustomRewardEnv(RedGymEnv):
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
         # NOTE: this is extreme item-action reward boosting
-        # if self.boost_menu_reward is True:
-        #     # encourage going to action bag menu with very small reward
-        #     if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
-        #         self.menu_reward_cooldown = 30
-        #         self.action_bag_menu_count += 1
-        #         self.rewarded_action_bag_menu += 1
-        #         return 0.001
-        #     # other actions -- no reward
-        #     return 0
+        if self.boost_menu_reward is True:
+            # encourage going to action bag menu with very small reward
+            if self.seen_action_bag_menu == 1:  # and self.menu_reward_cooldown == 0:
+                #self.menu_reward_cooldown = 30  # NOTE: NO cooldown during boost
+                self.action_bag_menu_count += 1
+                self.rewarded_action_bag_menu += 1
+                return 0.001
+            # other actions -- no reward
+            return 0
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()

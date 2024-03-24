@@ -43,7 +43,7 @@ env:
   reduce_res: True
 
 train:
-  seed: 1
+  seed: 2  # lucky seed?
   torch_deterministic: True
   device: cuda
   compile: True
