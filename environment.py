@@ -266,7 +266,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # Party strength proxy
             "party_size": self.party_size * 2.0,
-            "level": self.level_reward * 0.25,
+            "level": self.level_reward,
 
             # Important skill: learning moves with items
             "learn_with_item": self.moves_learned_with_item * 3.0,
@@ -376,13 +376,12 @@ class CustomRewardEnv(RedGymEnv):
             x for x in [self.read_m(addr) for addr in PARTY_LEVEL_ADDRS[:self.party_size]] if x > 0
         ]
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
-        return self.max_level_sum
 
-        # level_cap = 15
-        # if self.max_level_sum < level_cap:
-        #     return self.max_level_sum
-        # else:
-        #     return level_cap + (self.max_level_sum - level_cap) / 4
+        level_cap = 10
+        if self.max_level_sum < level_cap:
+            return self.max_level_sum
+        else:
+            return level_cap + (self.max_level_sum - level_cap) / 4
 
     def _update_tile_reward_vars(self):
         key = self.get_game_coords()
