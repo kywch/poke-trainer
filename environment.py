@@ -16,7 +16,8 @@ BATTLE_FLAG = 0xD057
 TEXT_BOX_UP = 0xCFC4
 
 
-MENU_COOLDOWN = 30
+MENU_COOLDOWN_NORMAL = 200
+MENU_BOOST_COOLDOWN = 30
 PRESS_BUTTON_A = 5
 
 BASE_ENEMY_LEVEL = 4
@@ -31,33 +32,11 @@ STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridia
                   92]               # Vermilion gym (can go there after learning cut)
 
 
-# class MaxLenQueue:
-#     def __init__(self, maxlen):
-#         self.maxlen = maxlen
-#         self.queue = []
-#         self.unique_items = set()
-
-#     def append(self, item) -> bool:
-#         if item in self.unique_items:
-#             return False
-
-#         if len(self.queue) >= self.maxlen:
-#             del_item = self.queue.pop(0)
-#             self.unique_items.remove(del_item)
-
-#         self.queue.append(item)
-#         self.unique_items.add(item)
-#         return True
-
-#     def clear(self):
-#         self.queue.clear()
-#         self.unique_items.clear()
-
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
         self.init_max_steps = env_config.max_steps
-        self.cooldown_duration = MENU_COOLDOWN
+        self.cooldown_duration = MENU_COOLDOWN_NORMAL
 
         self.essential_map_locations = {
             v: i for i, v in enumerate(STORY_PROGRESS)
@@ -77,20 +56,14 @@ class CustomRewardEnv(RedGymEnv):
         # self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
 
         # NOTE: decaying seen coords/tiles makes reward dense, making the place more "sticky"
-        # not well understood the dynamics yet. Buy decaying the value when there are so many coords
-        # decrease the summed value much and thus push the agents to visit new coord more, just to fill it
-        # Thus using MaxLengthWrapper to cap the seen coords at 3000
         self.decay_frequency = 10
         self.tile_reward = 0
         self.seen_tiles = {}
         self.decay_factor_coords = 0.9995
 
         self.npc_reward = 0
-        #self.talked_npcs = MaxLenQueue(50)  # keep the last 50 npcs
         self.talked_npcs = {}  # set()  # {}
         self.decay_factor_npcs = 0.999
-        # NOTE: 10000 seems to be small, so that agents went back to the same npc to get reward
-        # self.forget_frequency_npc = 32768  # clear talked_npcs every N steps
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -194,13 +167,10 @@ class CustomRewardEnv(RedGymEnv):
             self.menu_reward_cooldown -= 1
 
         self.boost_menu_reward = self.got_hm01_cut_but_not_learned_yet()
-        self.cooldown_duration = MENU_COOLDOWN  # if self.boost_menu_reward is False else 0
         # if self.boost_menu_reward:
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
         #     pass
-
-        # Apply decay on the seen coords and npcs
 
         obs, rew, reset, _, info = super().step(action)
 
@@ -230,25 +200,18 @@ class CustomRewardEnv(RedGymEnv):
                 self.action_bag_menu_count += 1
                 if self.menu_reward_cooldown == 0:
                     self.rewarded_action_bag_menu += 1
-                    self.menu_reward_cooldown = self.cooldown_duration
+                    self.menu_reward_cooldown = MENU_COOLDOWN_NORMAL
             if self.check_if_in_pokemon_menu():
                 self.pokemon_action_count += 1
                 if self.menu_reward_cooldown == 0:
                     self.rewared_pokemon_action += 1
-                    self.menu_reward_cooldown = self.cooldown_duration
+                    self.menu_reward_cooldown = MENU_COOLDOWN_NORMAL
 
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
-        # NOTE: this is extreme item-action reward boosting
         if self.boost_menu_reward is True:
-            # encourage going to action bag menu with small reward
-            if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
-                self.menu_reward_cooldown = MENU_COOLDOWN
-                self.action_bag_menu_count += 1
-                self.rewarded_action_bag_menu += 1
-                return 0.001
-            # other actions -- no reward
-            return 0
+            # NOTE: this is extreme item-action reward boosting
+            return self._process_menu_boost_reward()
 
         # compute reward
         self.progress_reward = self.get_game_state_reward()
@@ -257,6 +220,28 @@ class CustomRewardEnv(RedGymEnv):
 
         self.total_reward = new_total
         return new_step
+
+    def got_hm01_cut_but_not_learned_yet(self):
+        return not self.taught_cut and all(self.key_events_to_cut)
+
+    def _process_menu_boost_reward(self):
+        self.taught_cut = self.check_if_party_has_cut()
+        if self.taught_cut > 0:
+            return 10.0
+
+        self._update_learned_moves_with_item_vars()
+        if self.just_learned_item_move > 0:
+            return 1.0
+
+        # encourage going to action bag menu with small reward
+        if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
+            self.menu_reward_cooldown = MENU_BOOST_COOLDOWN
+            self.action_bag_menu_count += 1
+            self.rewarded_action_bag_menu += 1
+            return 0.001
+
+        # other actions -- no reward
+        return 0
 
     # TODO: make the reward weights configurable
     def get_game_state_reward(self, print_stats=False):
@@ -267,15 +252,17 @@ class CustomRewardEnv(RedGymEnv):
             self.step_decay_memory_tile_npc()
 
         self._update_event_reward_vars()
+        self._update_learned_moves_with_item_vars()
         self._update_tile_reward_vars()
         self._update_npc_reward_vars()
 
         return {
             # Main milestones for story progression
             "badge": self.badges * 10.0,
+            "taught_cut": self.taught_cut * 10.0,
             "map_progress": self.max_map_progress * 3.0,
             "opponent_level": (self.max_opponent_level - BASE_ENEMY_LEVEL) * 2.0,
-            "key_events": self.key_events_reward * 4.0,
+            "key_events": sum(self.key_events_to_cut) * 4.0,
 
             # Party strength proxy
             "party_size": self.party_size * 2.0,
@@ -367,6 +354,7 @@ class CustomRewardEnv(RedGymEnv):
             self.read_bit(0xD803, 0),  # got hm 01
         ]
 
+    def _update_learned_moves_with_item_vars(self):
         # Check learn moves with item -- could be spammed later, but it's fine for now
         new_moves = self.moves_obtained.sum()
         self.just_learned_item_move = 0
@@ -378,12 +366,9 @@ class CustomRewardEnv(RedGymEnv):
         self.curr_moves = new_moves
         self.curr_item_num = self.read_m(ITEM_COUNT)
 
-    def got_hm01_cut_but_not_learned_yet(self):
-        return not self.taught_cut and all(self.key_events_to_cut)
-
-    @property
-    def key_events_reward(self):
-        return sum(self.key_events_to_cut) + self.taught_cut
+    # @property
+    # def key_events_reward(self):
+    #     return sum(self.key_events_to_cut)
 
     @property
     def level_reward(self):
@@ -436,15 +421,7 @@ class CustomRewardEnv(RedGymEnv):
                 map_id = self.pyboy.get_memory_value(0xD35E)
                 _, npc_id = min(npc_candidates, key=lambda x: x[0])
 
-                # NOTE: if the npc is not seen for last 50 npcs, give reward
-                #self.npc_reward += 1 if self.talked_npcs.append((map_id, npc_id)) else 0
-
-                # NOTE: npc reward with full forgetting
-                # if (map_id, npc_id) not in self.talked_npcs:
-                #     self.talked_npcs.add((map_id, npc_id))
-                #     self.npc_reward += 1
-
-                # NOTE: npc memory decay
+                # Apply npc memory decay
                 if (map_id, npc_id) not in self.talked_npcs:
                     rew = self.talked_npcs[(map_id, npc_id)] = 1
                 else:
