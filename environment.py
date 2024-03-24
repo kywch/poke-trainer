@@ -378,10 +378,11 @@ class CustomRewardEnv(RedGymEnv):
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
 
         level_cap = 10
+        weight_over_cap = 1/3
         if self.max_level_sum < level_cap:
             return self.max_level_sum
         else:
-            return level_cap + (self.max_level_sum - level_cap) / 4
+            return level_cap + (self.max_level_sum - level_cap) * weight_over_cap
 
     def _update_tile_reward_vars(self):
         key = self.get_game_coords()
