@@ -194,7 +194,7 @@ class CustomRewardEnv(RedGymEnv):
             self.menu_reward_cooldown -= 1
 
         self.boost_menu_reward = self.got_hm01_cut_but_not_learned_yet()
-        self.cooldown_duration = MENU_COOLDOWN if self.boost_menu_reward is False else 0
+        self.cooldown_duration = MENU_COOLDOWN  # if self.boost_menu_reward is False else 0
         # if self.boost_menu_reward:
         #     # NOTE: only for HM cut now
         #     self.set_cursor_to_item(target_id=0xC4)  # 0xC4: HM cut
@@ -241,9 +241,9 @@ class CustomRewardEnv(RedGymEnv):
     def update_reward(self):
         # NOTE: this is extreme item-action reward boosting
         if self.boost_menu_reward is True:
-            # encourage going to action bag menu with very small reward
-            if self.seen_action_bag_menu == 1:  # and self.menu_reward_cooldown == 0:
-                #self.menu_reward_cooldown = 30  # NOTE: NO cooldown during boost
+            # encourage going to action bag menu with small reward
+            if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
+                self.menu_reward_cooldown = MENU_COOLDOWN
                 self.action_bag_menu_count += 1
                 self.rewarded_action_bag_menu += 1
                 return 0.001
