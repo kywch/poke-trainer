@@ -17,7 +17,7 @@ TEXT_BOX_UP = 0xCFC4
 
 
 MENU_COOLDOWN_NORMAL = 200
-MENU_BOOST_COOLDOWN = 30
+MENU_BOOST_COOLDOWN = 10
 PRESS_BUTTON_A = 5
 
 BASE_ENEMY_LEVEL = 4
@@ -225,15 +225,14 @@ class CustomRewardEnv(RedGymEnv):
         return not self.taught_cut and all(self.key_events_to_cut)
 
     def _process_menu_boost_reward(self):
-        self.taught_cut = self.check_if_party_has_cut()
-        if self.taught_cut > 0:
-            return 10.0
-
+        # Use/toss all the items -- hm 01 cannot be tossed
         self._update_learned_moves_with_item_vars()
         if self.just_learned_item_move > 0:
             return 1.0
+        if self.just_consumed_item > 0:
+            return 0.1
 
-        # encourage going to action bag menu with small reward
+        # Encourage going to action bag menu with small reward
         if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
             self.menu_reward_cooldown = MENU_BOOST_COOLDOWN
             self.action_bag_menu_count += 1
@@ -278,7 +277,7 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore_tile": self.tile_reward * 0.01,
+            "explore_tile": self.tile_reward * 0.02,
 
             # First, always search for new pokemon and events
             "seen_pokemon": self.seen_pokemon.sum() * 2.0,  # more related to story progression?
@@ -357,9 +356,11 @@ class CustomRewardEnv(RedGymEnv):
     def _update_learned_moves_with_item_vars(self):
         # Check learn moves with item -- could be spammed later, but it's fine for now
         new_moves = self.moves_obtained.sum()
+        self.just_consumed_item = 0
         self.just_learned_item_move = 0
         if self.read_m(ITEM_COUNT) < self.curr_item_num:  # item consumed/tossed?
             self.consumed_item_count += 1
+            self.just_consumed_item = 1
             if new_moves > self.curr_moves:  # move learned
                 self.moves_learned_with_item += 1
                 self.just_learned_item_move = 1
