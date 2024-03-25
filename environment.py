@@ -377,8 +377,8 @@ class CustomRewardEnv(RedGymEnv):
         ]
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
 
-        level_cap = 10
-        weight_over_cap = 1/3
+        level_cap = 30
+        weight_over_cap = 1/4
         if self.max_level_sum < level_cap:
             return self.max_level_sum
         else:
