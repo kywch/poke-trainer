@@ -71,7 +71,11 @@ class CustomRewardEnv(RedGymEnv):
         self.weight_key_event = reward_config["weight_key_event"]
         self.weight_map_progress = reward_config["weight_map_progress"]
         self.weight_max_opponent_level = reward_config["weight_max_opponent_level"]
+
         self.weight_party_size = reward_config["weight_party_size"]
+        self.weight_level_cap = reward_config["weight_level_cap"]
+        self.weight_over_level_multiplier = reward_config["weight_over_level_multiplier"]
+
         self.weight_learned_moves_with_item = reward_config["weight_learned_moves_with_item"]
         self.weight_learned_moves = reward_config["weight_learned_moves"]
 
@@ -221,6 +225,11 @@ class CustomRewardEnv(RedGymEnv):
             info["stats"]["new_event_reward"] = self.event_reward.sum()
             info["stats"]["new_tile_reward"] = self.tile_reward
             info["stats"]["new_npc_reward"] = self.npc_reward
+
+            # Cut-related infos
+            info["stats"]["cut_attempt"] = self.cut_attempt
+            info["stats"]["cut_success"] = len(self.cut_success)
+            info["stats"]["cut_close_cnt"] = len(self.cut_close)
 
         return obs, rew, reset, False, info
 
@@ -413,8 +422,8 @@ class CustomRewardEnv(RedGymEnv):
         ]
         self.max_level_sum = max(self.max_level_sum, sum(party_levels))
 
-        level_cap = 30
-        weight_over_cap = 1/4
+        level_cap = self.weight_level_cap
+        weight_over_cap = self.weight_over_level_multiplier
         if self.max_level_sum < level_cap:
             return self.max_level_sum
         else:
