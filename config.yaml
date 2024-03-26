@@ -98,15 +98,15 @@ rewards:
       weight_seen_npcs: 0.01
       weight_badge: 10.0
       weight_key_event: 4.0
-      weight_map_progress: 3.0
+      weight_map_progress: 4.0
       weight_max_opponent_level: 2.0
       weight_party_size: 2.0
       weight_level_cap: 60
       weight_over_level_multiplier: 0.25
       weight_learned_moves_with_item: 3.0
       weight_learned_moves: 0.1
-      weight_seen_pokemon: 2.0
-      weight_max_event: 1.0
+      weight_seen_pokemon: 3.0
+      weight_max_event: 1.5
       weight_hidden_obj: 0.02
       weight_menu_reward: 0.0001
       cooldown_menu_normal: 200
