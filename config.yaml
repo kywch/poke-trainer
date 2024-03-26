@@ -94,7 +94,7 @@ rewards:
       decay_factor_coords: 0.9995
       decay_factor_npcs: 0.999
       decay_floor: 0.3
-      weight_tile_exploration: 0.015
+      weight_tile_exploration: 0.01
       weight_seen_npcs: 0.01
       weight_badge: 10.0
       weight_key_event: 4.0
@@ -106,7 +106,7 @@ rewards:
       weight_learned_moves_with_item: 3.0
       weight_learned_moves: 0.1
       weight_seen_pokemon: 3.0
-      weight_max_event: 1.5
+      weight_max_event: 1.0
       weight_hidden_obj: 0.02
       weight_menu_reward: 0.0001
       cooldown_menu_normal: 200
