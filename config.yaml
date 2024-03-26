@@ -94,25 +94,29 @@ rewards:
       decay_factor_coords: 0.9995
       decay_factor_npcs: 0.999
       decay_floor: 0.3
-      weight_tile_exploration: 0.015
-      weight_seen_npcs: 0.01
-      weight_badge: 10.0
-      weight_key_event: 4.0
-      weight_map_progress: 4.0
-      weight_max_opponent_level: 2.0
-      weight_party_size: 2.0
+
+      # Set max weight to 1
+      weight_badge: 1.0
+      weight_tile_exploration: 0.0015
+      weight_seen_npcs: 0.001
+      weight_key_event: 0.3
+      weight_map_progress: 0.3
+      weight_max_opponent_level: 0.2
+      weight_party_size: 0.2
+      weight_level_sum: 0.1
       weight_level_cap: 30
       weight_over_level_multiplier: 0.3
-      weight_learned_moves_with_item: 3.0
-      weight_learned_moves: 0.1
-      weight_seen_pokemon: 3.0
-      weight_max_event: 1.0
-      weight_hidden_obj: 0.02
-      weight_menu_reward: 0.0001
+      weight_learned_moves_with_item: 0.3
+      weight_learned_moves: 0.01
+      weight_seen_pokemon: 0.3
+      weight_max_event: 0.1
+      weight_hidden_obj: 0.002
+      weight_menu_reward: 0.00001
       cooldown_menu_normal: 200
       cooldown_menu_boost: 10
-      weight_cut_attempt: 0.01
-      weight_cut_success: 10.0
+      weight_cut_attempt: 0.001
+      weight_cut_close: 0.01
+      weight_cut_success: 1.0
       cooldown_cut: 100
 
 policies:

@@ -73,6 +73,7 @@ class CustomRewardEnv(RedGymEnv):
         self.weight_max_opponent_level = reward_config["weight_max_opponent_level"]
 
         self.weight_party_size = reward_config["weight_party_size"]
+        self.weight_level_sum = reward_config["weight_level_sum"]
         self.weight_level_cap = reward_config["weight_level_cap"]
         self.weight_over_level_multiplier = reward_config["weight_over_level_multiplier"]
 
@@ -90,6 +91,7 @@ class CustomRewardEnv(RedGymEnv):
         # revisit later
         self.weight_cut_attempt = reward_config["weight_cut_attempt"]
         self.weight_cut_success = reward_config["weight_cut_success"]
+        self.weight_cut_close = reward_config["weight_cut_close"]
         self.cooldown_cut = reward_config["cooldown_cut"]
 
         # NOTE: observation space must match the policy input
@@ -268,16 +270,16 @@ class CustomRewardEnv(RedGymEnv):
         # Use/toss all the items -- hm 01 cannot be tossed
         self._update_learned_moves_with_item_vars()
         if self.just_learned_item_move > 0:
-            return 1.0
-        if self.just_consumed_item > 0:
             return 0.1
+        if self.just_consumed_item > 0:
+            return 0.01
 
         # Encourage going to action bag menu with small reward
         if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
             self.menu_reward_cooldown = self.cooldown_menu_boost
             self.action_bag_menu_count += 1
             self.rewarded_action_bag_menu += 1
-            return 0.001
+            return 0.0001
 
         # other actions -- no reward
         return 0
@@ -306,7 +308,7 @@ class CustomRewardEnv(RedGymEnv):
 
             # Party strength proxy
             "party_size": self.party_size * self.weight_party_size,
-            "level": self.level_reward,
+            "level": self.level_reward * self.weight_level_sum,
 
             # Important skill: learning moves with items
             "learn_with_item": self.moves_learned_with_item * self.weight_learned_moves_with_item,
@@ -369,8 +371,8 @@ class CustomRewardEnv(RedGymEnv):
                 #           - 0-ing all known events make story progression very fast after reset, but forget events
 
                 #discount_factor = 1.0 / self.event_count[addr]
-                discount_factor = (11 - self.event_count[addr]) * 0.1 if self.event_count[addr] < 5 else 0.7
-                self.event_reward[i] = self.bit_count(val) * discount_factor
+                #discount_factor = (11 - self.event_count[addr]) * 0.1 if self.event_count[addr] < 5 else 0.7
+                self.event_reward[i] = self.bit_count(val) # * discount_factor
 
         # NOTE: base_event_reward is different after reset. What's going on?
         if self.base_event_reward == 0:
@@ -528,7 +530,7 @@ class CustomRewardEnv(RedGymEnv):
                 if map_id == 5 and len(self.cut_success) == 0:
                     dist_to_target = max(abs(x - 3984), abs(y - 4512))
                     if dist_to_target < 6:
-                        self.cut_close[(coords, player_direction)] = (6 - dist_to_target) * 0.1
+                        self.cut_close[(coords, player_direction)] = (6 - dist_to_target) * self.weight_cut_close
 
                 elif self.cut_reward_cooldown == 0:
                     self.cut_attempt += 1
