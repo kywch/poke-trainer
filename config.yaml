@@ -97,13 +97,13 @@ rewards:
 
       # Set max weight to 1
       weight_badge: 1.0
-      weight_tile_exploration: 0.0015
+      weight_tile_exploration: 0.002
       weight_seen_npcs: 0.001
       weight_key_event: 0.3
       weight_map_progress: 0.3
       weight_max_opponent_level: 0.2
       weight_party_size: 0.2
-      weight_level_sum: 0.1
+      weight_level_sum: 0.07
       weight_level_cap: 30
       weight_over_level_multiplier: 0.3
       weight_learned_moves_with_item: 0.3
