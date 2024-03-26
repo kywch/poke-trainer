@@ -1,4 +1,5 @@
 from typing import Optional
+from collections import deque
 
 import numpy as np
 from gymnasium import spaces
@@ -9,19 +10,19 @@ from pokemonred_puffer.environment import (
     EVENT_FLAGS_START,
     EVENTS_FLAGS_LENGTH,
     PARTY_LEVEL_ADDRS,
+    CUT_SEQ,
+    CUT_GRASS_SEQ,
+    CUT_FAIL_SEQ,
 )
 
 ITEM_COUNT = 0xD31D
 BATTLE_FLAG = 0xD057
 TEXT_BOX_UP = 0xCFC4
+MUSEUM_TICKET = (0xD754, 0)
 
-
-MENU_COOLDOWN_NORMAL = 200
-MENU_BOOST_COOLDOWN = 10
 PRESS_BUTTON_A = 5
 
 BASE_ENEMY_LEVEL = 4
-MUSEUM_TICKET = (0xD754, 0)
 
 # Map ids to visit in sequene -- CANNOT use the map id more than once
 STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridian city
@@ -36,34 +37,56 @@ class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
         self.init_max_steps = env_config.max_steps
-        self.cooldown_duration = MENU_COOLDOWN_NORMAL
-
         self.essential_map_locations = {
             v: i for i, v in enumerate(STORY_PROGRESS)
         }
 
-        #self.event_obs = np.zeros(320, dtype=np.uint8)
         self.event_count = {}  # kept for whole training run, take this when checkpointing
         self.experienced_events = set()  # reset every episode
         self.event_reward = np.zeros(320)
         self.base_event_reward = 0
 
-        self._reset_reward_vars()
-
-        # NOTE: these are not yet used
-        # self.explore_weight = reward_config["explore_weight"]
-        # self.explore_npc_weight = reward_config["explore_npc_weight"]
-        # self.explore_hidden_obj_weight = reward_config["explore_hidden_obj_weight"]
-
         # NOTE: decaying seen coords/tiles makes reward dense, making the place more "sticky"
-        self.decay_frequency = 10
         self.tile_reward = 0
         self.seen_tiles = {}
-        self.decay_factor_coords = 0.9995
-
         self.npc_reward = 0
-        self.talked_npcs = {}  # set()  # {}
-        self.decay_factor_npcs = 0.999
+        self.talked_npcs = {}
+
+        self.cut_success = set()
+        self.cut_attempt = 0
+        self.cut_close = {}
+
+        self._reset_reward_vars()
+
+        # Reward weights
+        self.decay_frequency = reward_config["decay_frequency"]
+        self.decay_factor_coords = reward_config["decay_factor_coords"]
+        self.decay_factor_npcs = reward_config["decay_factor_npcs"]
+        self.decay_floor = reward_config["decay_floor"]
+
+        self.weight_tile_exploration = reward_config["weight_tile_exploration"]
+        self.weight_seen_npcs = reward_config["weight_seen_npcs"]
+
+        self.weight_badge = reward_config["weight_badge"]
+        self.weight_key_event = reward_config["weight_key_event"]
+        self.weight_map_progress = reward_config["weight_map_progress"]
+        self.weight_max_opponent_level = reward_config["weight_max_opponent_level"]
+        self.weight_party_size = reward_config["weight_party_size"]
+        self.weight_learned_moves_with_item = reward_config["weight_learned_moves_with_item"]
+        self.weight_learned_moves = reward_config["weight_learned_moves"]
+
+        self.weight_seen_pokemon = reward_config["weight_seen_pokemon"]
+        self.weight_max_event = reward_config["weight_max_event"]
+        self.weight_hidden_obj = reward_config["weight_hidden_obj"]
+
+        self.weight_menu_reward = reward_config["weight_menu_reward"]
+        self.cooldown_menu_normal = reward_config["cooldown_menu_normal"]
+        self.cooldown_menu_boost = reward_config["cooldown_menu_boost"]
+
+        # revisit later
+        self.weight_cut_attempt = reward_config["weight_cut_attempt"]
+        self.weight_cut_success = reward_config["weight_cut_success"]
+        self.cooldown_cut = reward_config["cooldown_cut"]
 
         # NOTE: observation space must match the policy input
         self.observation_space = spaces.Dict(
@@ -162,9 +185,17 @@ class CustomRewardEnv(RedGymEnv):
         self.moves_learned_with_item = 0
         self.just_learned_item_move = 0
 
+        # Track cut tiles
+        self.cut_success.clear()
+        self.cut_close.clear()
+        self.cut_attempt = 0
+        self.cut_reward_cooldown = 0
+
     def step(self, action):
         if self.menu_reward_cooldown > 0:
             self.menu_reward_cooldown -= 1
+        if self.cut_reward_cooldown > 0:
+            self.cut_reward_cooldown -= 1
 
         self.boost_menu_reward = self.got_hm01_cut_but_not_learned_yet()
         # if self.boost_menu_reward:
@@ -200,12 +231,12 @@ class CustomRewardEnv(RedGymEnv):
                 self.action_bag_menu_count += 1
                 if self.menu_reward_cooldown == 0:
                     self.rewarded_action_bag_menu += 1
-                    self.menu_reward_cooldown = MENU_COOLDOWN_NORMAL
+                    self.menu_reward_cooldown = self.cooldown_menu_normal
             if self.check_if_in_pokemon_menu():
                 self.pokemon_action_count += 1
                 if self.menu_reward_cooldown == 0:
                     self.rewared_pokemon_action += 1
-                    self.menu_reward_cooldown = MENU_COOLDOWN_NORMAL
+                    self.menu_reward_cooldown = self.cooldown_menu_normal
 
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
@@ -234,7 +265,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # Encourage going to action bag menu with small reward
         if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
-            self.menu_reward_cooldown = MENU_BOOST_COOLDOWN
+            self.menu_reward_cooldown = self.cooldown_menu_boost
             self.action_bag_menu_count += 1
             self.rewarded_action_bag_menu += 1
             return 0.001
@@ -254,22 +285,23 @@ class CustomRewardEnv(RedGymEnv):
         self._update_learned_moves_with_item_vars()
         self._update_tile_reward_vars()
         self._update_npc_reward_vars()
+        self._check_cut()
 
         return {
             # Main milestones for story progression
-            "badge": self.badges * 10.0,
-            "taught_cut": self.taught_cut * 10.0,
-            "map_progress": self.max_map_progress * 3.0,
-            "opponent_level": (self.max_opponent_level - BASE_ENEMY_LEVEL) * 2.0,
-            "key_events": sum(self.key_events_to_cut) * 4.0,
+            "badge": self.badges * self.weight_badge,
+            "taught_cut": self.taught_cut * self.weight_badge,
+            "key_events": sum(self.key_events_to_cut) * self.weight_key_event,
+            "map_progress": self.max_map_progress * self.weight_map_progress,
+            "opponent_level": (self.max_opponent_level - BASE_ENEMY_LEVEL) * self.weight_max_opponent_level,
 
             # Party strength proxy
-            "party_size": self.party_size * 2.0,
+            "party_size": self.party_size * self.weight_party_size,
             "level": self.level_reward,
 
             # Important skill: learning moves with items
-            "learn_with_item": self.moves_learned_with_item * 3.0,
-            "moves_obtained": self.curr_moves * 0.1,  # try to learn new moves, via menuing?
+            "learn_with_item": self.moves_learned_with_item * self.weight_learned_moves_with_item,
+            "moves_obtained": self.curr_moves * self.weight_learned_moves,
 
             # Exploration: bias agents' actions with weight for each new gain
             # These kick in when agent is "stuck"
@@ -277,31 +309,32 @@ class CustomRewardEnv(RedGymEnv):
             # NOTE: exploring "newer" tiles is the main driver of progression
             # Visit decay makes the explore reward "dense" ... little reward everywhere
             # so agents are motivated to explore new coords and/or revisit old coords
-            "explore_tile": self.tile_reward * 0.02,
+            "explore_tile": self.tile_reward * self.weight_tile_exploration,
 
             # First, always search for new pokemon and events
-            "seen_pokemon": self.seen_pokemon.sum() * 2.0,  # more related to story progression?
+            "seen_pokemon": self.seen_pokemon.sum() * self.weight_seen_pokemon,  # more related to story progression?
 
             # NOTE: there seems to be a lot of irrevant events?
             # event weight ~0: after 1st reset, agents go straight to the next target, but after 2-3, it forgets to make progress
             # event weight 1: atter 1st reset, agents stick to "old" events, that guarantee reward ... so does not make progress
             # after seeing this, implemented the experienced event reward discounting
-            "event": self.max_event_rew * 1.0,
+            "event": self.max_event_rew * self.weight_max_event,
 
             # If the above doesn't work, try these in the order of importance
-            "explore_hidden_objs": len(self.seen_hidden_objs) * 0.02,  # look for new hidden objs
-            "explore_npcs": self.npc_reward * 0.01,  # talk to npcs, getting discounted rew for revisiting
+            "explore_hidden_objs": len(self.seen_hidden_objs) * self.weight_hidden_obj,
+            "explore_npcs": self.npc_reward * self.weight_seen_npcs,  # talk to npcs, getting discounted rew for revisiting
 
             # Make these better than nothing, but do not let these be larger than the above
-            "bag_menu_action": self.rewarded_action_bag_menu * 0.0001,
-            "pokemon_menu_action": self.rewared_pokemon_action * 0.0001,
+            "bag_menu_action": self.rewarded_action_bag_menu * self.weight_menu_reward,
+            "pokemon_menu_action": self.rewared_pokemon_action * self.weight_menu_reward,
 
             # Charge cost per step, to encourage any action
             #"step_cost": self.step_count * -0.0003,  # ~40 at 132k steps
 
             # Cut-related. Revisit later.
-            "cut_coords": sum(self.cut_coords.values()) * 1.0,
-            "cut_tiles": len(self.cut_tiles) * 1.0,
+            "cut_success":  len(self.cut_success) * self.weight_cut_success,
+            "cut_attempt": self.cut_attempt * self.weight_cut_attempt,
+            "cut_close": sum(self.cut_close.values()),
         }
 
     def _update_event_obs(self):
@@ -342,6 +375,7 @@ class CustomRewardEnv(RedGymEnv):
 
         # Check KEY events
         self.badges = self.get_badges()
+        rival_3 = self.read_m(0xD665) == 4  # beat rival before the captain
         self.key_events_to_cut = [
             self.read_bit(0xD7F1, 0),  # met bill
             self.read_bit(0xD7F2, 3),  # used cell separator on bill
@@ -349,6 +383,7 @@ class CustomRewardEnv(RedGymEnv):
             self.read_bit(0xD7F2, 5),  # met bill 2
             self.read_bit(0xD7F2, 6),  # bill said use cell separator
             self.read_bit(0xD7F2, 7),  # left bills house after helping
+            rival_3,                   # beat rival before the captain
             self.read_bit(0xD803, 1),  # rubbed_captain
             self.read_bit(0xD803, 0),  # got hm 01
         ]
@@ -433,11 +468,11 @@ class CustomRewardEnv(RedGymEnv):
 
     def step_decay_memory_tile_npc(self):
         self.seen_tiles.update(
-            (k, max(0.3, v * self.decay_factor_coords))
+            (k, max(self.decay_floor, v * self.decay_factor_coords))
             for k, v in self.seen_tiles.items()
         )
         self.talked_npcs.update(
-            (k, max(0.3, v * self.decay_factor_npcs))
+            (k, max(self.decay_floor, v * self.decay_factor_npcs))
             for k, v in self.talked_npcs.items()
         )
 
@@ -447,6 +482,50 @@ class CustomRewardEnv(RedGymEnv):
         # self.explore_map[self.explore_map > 0] = np.clip(
         #     self.explore_map[self.explore_map > 0], 0.15, 1
         # )
+
+    # NOTE: this is from thatguy env
+    def _check_cut(self):
+        if self.taught_cut > 0 and self.read_m(BATTLE_FLAG) == 0:
+            player_direction = self.pyboy.get_memory_value(0xC109)
+            x, y, map_id = self.get_game_coords()  # x, y, map_id
+            if player_direction == 0:  # down
+                coords = (x, y + 1, map_id)
+            if player_direction == 4:
+                coords = (x, y - 1, map_id)
+            if player_direction == 8:
+                coords = (x - 1, y, map_id)
+            if player_direction == 0xC:
+                coords = (x + 1, y, map_id)
+            self.cut_state.append(
+                (
+                    self.pyboy.get_memory_value(0xCFC6),
+                    self.pyboy.get_memory_value(0xCFCB),
+                    self.pyboy.get_memory_value(0xCD6A),
+                    self.pyboy.get_memory_value(0xD367),
+                    self.pyboy.get_memory_value(0xD125),
+                    self.pyboy.get_memory_value(0xCD3D),
+                )
+            )
+
+            if tuple(list(self.cut_state)[1:]) in CUT_SEQ:
+                self.cut_success.add(coords)
+
+            elif self.cut_state == CUT_GRASS_SEQ or \
+                 deque([(-1, *elem[1:]) for elem in self.cut_state]) == CUT_FAIL_SEQ:
+
+                # distance from the target tree
+                # vermilion city gym: (3984, 4512, 5)
+                # If the cut was attempted near the target tree, give reward
+                if map_id == 5 and len(self.cut_success) == 0:
+                    dist_to_target = max(abs(x - 3984), abs(y - 4512))
+                    if dist_to_target < 6:
+                        self.cut_close[(coords, player_direction)] = (6 - dist_to_target) * 0.1
+
+                elif self.cut_reward_cooldown == 0:
+                    self.cut_attempt += 1
+                    self.cut_reward_cooldown = self.cooldown_cut
+
+
 
     ##########################################################################
     # Scripting helpers below

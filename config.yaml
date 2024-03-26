@@ -35,7 +35,7 @@ env:
   state_dir: pyboy_states
   init_state: Bulbasaur
   action_freq: 24
-  max_steps: 524288
+  max_steps: 655360
   save_video: False
   fast_video: False
   frame_stacks: 1
@@ -86,27 +86,32 @@ wrappers:
   baseline:
     - stream_wrapper.StreamWrapper:
         user: kywch
-    # - exploration.MaxLengthWrapper:
-    #     capacity: 3000
-    # - exploration.DecayWrapper:
-    #     step_forgetting_factor:
-    #       npc: 0.9
-    #       coords: 0.9
-    #       map_ids: 0.9
-    #       explore: 0.9
-    #       start_menu: 0.998
-    #       pokemon_menu: 0.998
-    #       stats_menu: 0.998
-    #       bag_menu: 0.998
-    #       action_bag_menu: 0.998
-    #     forgetting_frequency: 1000
 
 rewards:
   environment.CustomRewardEnv:
     reward:
-      explore_weight: 3.0
-      explore_npc_weight: 1.0
-      explore_hidden_obj_weight: 1.0
+      decay_frequency: 10
+      decay_factor_coords: 0.9995
+      decay_factor_npcs: 0.999
+      decay_floor: 0.3
+      weight_tile_exploration: 0.02
+      weight_seen_npcs: 0.01
+      weight_badge: 10.0
+      weight_key_event: 4.0
+      weight_map_progress: 3.0
+      weight_max_opponent_level: 2.0
+      weight_party_size: 2.0
+      weight_learned_moves_with_item: 3.0
+      weight_learned_moves: 0.1
+      weight_seen_pokemon: 2.0
+      weight_max_event: 1.0
+      weight_hidden_obj: 0.02
+      weight_menu_reward: 0.0001
+      cooldown_menu_normal: 200
+      cooldown_menu_boost: 10
+      weight_cut_attempt: 0.01
+      weight_cut_success: 10.0
+      cooldown_cut: 100
 
 policies:
   policy.ConvolutionalPolicy:
