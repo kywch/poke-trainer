@@ -97,7 +97,7 @@ rewards:
 
       # Set max weight to 1
       weight_badge: 1.0
-      weight_tile_exploration: 0.002
+      weight_tile_exploration: 0.003
       weight_seen_npcs: 0.001
       weight_key_event: 0.3
       weight_map_progress: 0.3
