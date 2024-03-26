@@ -20,6 +20,8 @@ BATTLE_FLAG = 0xD057
 TEXT_BOX_UP = 0xCFC4
 MUSEUM_TICKET = (0xD754, 0)
 
+GYM_3_TREE = (3984, 4512, 5)
+
 PRESS_BUTTON_A = 5
 
 BASE_ENEMY_LEVEL = 4
@@ -527,7 +529,7 @@ class CustomRewardEnv(RedGymEnv):
                 # distance from the target tree
                 # vermilion city gym: (3984, 4512, 5)
                 # If the cut was attempted near the target tree, give reward
-                if map_id == 5 and len(self.cut_success) == 0:
+                if map_id == 5 and GYM_3_TREE not in self.cut_success:
                     dist_to_target = max(abs(x - 3984), abs(y - 4512))
                     if dist_to_target < 6:
                         self.cut_close[(coords, player_direction)] = (6 - dist_to_target) * self.weight_cut_close
