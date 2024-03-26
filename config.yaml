@@ -94,7 +94,7 @@ rewards:
       decay_factor_coords: 0.9995
       decay_factor_npcs: 0.999
       decay_floor: 0.3
-      weight_tile_exploration: 0.01
+      weight_tile_exploration: 0.015
       weight_seen_npcs: 0.01
       weight_badge: 10.0
       weight_key_event: 4.0
