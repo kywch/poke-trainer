@@ -109,7 +109,7 @@ rewards:
       weight_learned_moves_with_item: 0.3
       weight_learned_moves: 0.01
       weight_seen_pokemon: 0.3
-      weight_max_event: 0.1
+      weight_max_event: 0.2
       weight_hidden_obj: 0.002
       weight_menu_reward: 0.00001
       cooldown_menu_normal: 200
