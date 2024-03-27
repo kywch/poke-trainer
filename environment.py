@@ -38,7 +38,7 @@ STORY_PROGRESS = [40, 0, 12, 1,     # Oaks lab - Pallet town - Route 1 - Veridia
 class CustomRewardEnv(RedGymEnv):
     def __init__(self, env_config: pufferlib.namespace, reward_config: pufferlib.namespace):
         super().__init__(env_config)
-        self.init_max_steps = env_config.max_steps
+        self.default_max_steps = env_config.max_steps
         self.essential_map_locations = {
             v: i for i, v in enumerate(STORY_PROGRESS)
         }
@@ -140,11 +140,11 @@ class CustomRewardEnv(RedGymEnv):
         }
 
     def reset(self, seed: Optional[int] = None):
-        # After each reset, increase max steps
-        #self.max_steps += self.init_max_steps
-
         # Load the state and reset all the RedGymEnv vars
         obs, info = super().reset(seed)
+
+        # Treat the initial episode as a short tutorial
+        #self.max_steps = self.default_max_steps / 2 if self.first is True else self.default_max_steps
 
         # NOTE: these dict are used for exploration decay within episode
         # So they should be reset every episode
@@ -272,9 +272,9 @@ class CustomRewardEnv(RedGymEnv):
         # Use/toss all the items -- hm 01 cannot be tossed
         self._update_learned_moves_with_item_vars()
         if self.just_learned_item_move > 0:
-            return 0.1
+            return 1.0
         if self.just_consumed_item > 0:
-            return 0.01
+            return 0.1
 
         # Encourage going to action bag menu with small reward
         if self.seen_action_bag_menu == 1 and self.menu_reward_cooldown == 0:
