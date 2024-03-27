@@ -96,9 +96,9 @@ rewards:
       decay_floor: 0.3
 
       weight_badge: 10.0
-      weight_tile_exploration: 0.01
+      weight_tile_exploration: 0.015
       weight_seen_npcs: 0.01
-      weight_key_event: 4.0
+      weight_key_event: 3.0
       weight_map_progress: 3.0
       weight_max_opponent_level: 2.0
       weight_party_size: 2.0
