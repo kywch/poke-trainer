@@ -98,13 +98,13 @@ rewards:
       weight_badge: 10.0
       weight_tile_exploration: 0.015
       weight_seen_npcs: 0.01
-      weight_key_event: 3.0
+      weight_key_event: 4.0
       weight_map_progress: 3.0
       weight_max_opponent_level: 2.0
       weight_party_size: 2.0
       weight_level_sum: 1.0
-      weight_level_cap: 15
-      weight_over_level_multiplier: 0.25
+      weight_level_cap: 30
+      weight_over_level_multiplier: 0.3
       weight_learned_moves_with_item: 3.0
       weight_learned_moves: 0.1
       weight_seen_pokemon: 2.0
