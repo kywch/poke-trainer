@@ -117,6 +117,7 @@ class CustomRewardEnv(RedGymEnv):
                 # NOTE: if there are other conditions for limited reward, more flags should be added
                 "boost_menu_reward": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
                 "cut_in_party": spaces.Box(low=0, high=1, shape=(1,), dtype=np.uint8),
+                "dist_to_tree": spaces.Box(low=0, high=1, shape=(1,), dtype=np.float64),  # 1: adjacent, 0: not adjacent, and in between
             }
         )
 
@@ -124,6 +125,8 @@ class CustomRewardEnv(RedGymEnv):
         # See pokemonred_puffer/map_data.json for map ids
         player_x, player_y, map_idx = self.get_game_coords()
         map_idx += 1  # map_id starts from -1 (Kanto) to 247 (Agathas room)
+
+        dist_to_tree = self._get_dist_to_tree(map_idx, player_x, player_y)
 
         return {
             "screen": self._get_screen_obs(),
@@ -137,7 +140,19 @@ class CustomRewardEnv(RedGymEnv):
             #"direction": np.array(self.pyboy.get_memory_value(0xC109) // 4, dtype=np.uint8),
             "boost_menu_reward": np.array(self.boost_menu_reward, dtype=np.uint8),
             "cut_in_party": np.array(self.taught_cut, dtype=np.uint8),
+            "dist_to_tree": np.array(dist_to_tree, dtype=np.float64),
         }
+
+    def _get_dist_to_tree(self, map_id, player_x, player_y):
+        cutoff_dist = 20
+        # NOTE: this is for the gym 3 tree only, for now. Will add some more here
+        if map_id == 5:
+            dist = max(abs(player_x - GYM_3_TREE[0]), abs(player_y - GYM_3_TREE[1]))
+            if dist > cutoff_dist:
+                return 0
+            return 1.0 / dist if dist > 0 else 1.0
+
+        return 0
 
     def reset(self, seed: Optional[int] = None):
         # Load the state and reset all the RedGymEnv vars
@@ -197,6 +212,7 @@ class CustomRewardEnv(RedGymEnv):
         self.cut_success.clear()
         self.cut_close.clear()
         self.cut_attempt = 0
+        self.cut_tutorial_reward = 0
         self.cut_reward_cooldown = 0
 
     def step(self, action):
@@ -250,6 +266,11 @@ class CustomRewardEnv(RedGymEnv):
                 if self.menu_reward_cooldown == 0:
                     self.rewared_pokemon_action += 1
                     self.menu_reward_cooldown = self.cooldown_menu_normal
+
+                # NOTE: encourage pokemon action after learning cut, to use cut
+                # So, no menu reward cooldown
+                elif self.taught_cut > 0 and self.cut_attempt < 3:  # CUT TUTORIAL is hard coded
+                    self.rewared_pokemon_action += 1
 
     # Reward is computed with update_reward(), which calls get_game_state_reward()
     def update_reward(self):
@@ -348,6 +369,7 @@ class CustomRewardEnv(RedGymEnv):
             "cut_success":  len(self.cut_success) * self.weight_cut_success,
             "cut_attempt": self.cut_attempt * self.weight_cut_attempt,
             "cut_close": sum(self.cut_close.values()),
+            "cut_tutorial": self.cut_tutorial_reward,
         }
 
     def _update_event_obs(self):
@@ -526,18 +548,22 @@ class CustomRewardEnv(RedGymEnv):
             elif self.cut_state == CUT_GRASS_SEQ or \
                  deque([(-1, *elem[1:]) for elem in self.cut_state]) == CUT_FAIL_SEQ:
 
+                # large reward for the first three cut attempts
+                if self.cut_attempt < 3:  # CUT TUTORIAL is hard coded
+                    self.cut_tutorial_reward += (3 - self.cut_attempt)
+                    self.cut_attempt += 1
+
                 # distance from the target tree
                 # vermilion city gym: (3984, 4512, 5)
                 # If the cut was attempted near the target tree, give reward
-                if map_id == 5 and GYM_3_TREE not in self.cut_success:
+                elif map_id == 5 and GYM_3_TREE not in self.cut_success:
                     dist_to_target = max(abs(x - 3984), abs(y - 4512))
                     if dist_to_target < 6:
                         self.cut_close[(coords, player_direction)] = (6 - dist_to_target) * self.weight_cut_close
 
                 elif self.cut_reward_cooldown == 0:
                     self.cut_attempt += 1
-                    self.cut_reward_cooldown = self.cooldown_cut
-
+                    self.cut_reward_cooldown = min(10*self.cut_attempt, self.cooldown_cut)
 
 
     ##########################################################################
